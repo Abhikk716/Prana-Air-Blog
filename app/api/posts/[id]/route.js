@@ -1,0 +1,122 @@
+import connectDB from '../../../../lib/db';
+import Post from '../../../../models/post';
+import mongoose from 'mongoose';
+
+// CORS headers
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+function translatePost(post, lang) {
+  if (!lang || lang === 'en') return post;
+  const translations = post.translations;
+  if (!translations) return post;
+  const t = translations.get ? translations.get(lang) : translations[lang];
+  if (!t) return post;
+  return {
+    ...post,
+    title: t.title || post.title,
+    content: t.content || post.content,
+    excerpt: t.excerpt || post.excerpt,
+    seo: {
+      title: t.seo?.title || post.seo?.title,
+      description: t.seo?.description || post.seo?.description,
+      keywords: t.seo?.keywords || post.seo?.keywords || [],
+    }
+  };
+}
+
+// OPTIONS – preflight for CORS
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
+// GET /api/posts/[id] - Fetch a single post by ID or Slug
+export async function GET(request, { params }) {
+  try {
+    await connectDB();
+    const { id } = await params;
+    const { searchParams } = new URL(request.url);
+    const lang = searchParams.get('lang') || 'en';
+
+    let rawPost;
+    // Check if ID is a valid MongoDB ObjectId, if not, search by slug
+    if (mongoose.Types.ObjectId.isValid(id)) {
+      rawPost = await Post.findById(id);
+    } else {
+      rawPost = await Post.findOne({ slug: id });
+    }
+
+    if (!rawPost) {
+      return Response.json({ success: false, error: 'Post not found.' }, { status: 404, headers: CORS_HEADERS });
+    }
+
+    const post = JSON.parse(JSON.stringify(rawPost.toObject({ getters: true, flattenMaps: true })));
+    const translated = translatePost(post, lang);
+
+    return Response.json({ success: true, data: translated }, { headers: CORS_HEADERS });
+  } catch (error) {
+    console.error('Error fetching post:', error);
+    return Response.json({ success: false, error: error.message }, { status: 500, headers: CORS_HEADERS });
+  }
+}
+
+
+// PUT /api/posts/[id] - Update an existing post by ID or Slug
+export async function PUT(request, { params }) {
+  try {
+    await connectDB();
+    const { id } = await params;
+    const body = await request.json();
+
+    let post;
+    const query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { slug: id };
+
+    // Handle published date assignment when status changes to published
+    if (body.status === 'published') {
+      const existingPost = await Post.findOne(query);
+      if (existingPost && !existingPost.publishedAt) {
+        body.publishedAt = new Date();
+      }
+    }
+
+    post = await Post.findOneAndUpdate(query, body, {
+      new: true,
+      runValidators: true,
+    });
+
+    if (!post) {
+      return Response.json({ success: false, error: 'Post not found.' }, { status: 404 });
+    }
+
+    return Response.json({ success: true, data: post });
+  } catch (error) {
+    console.error('Error updating post:', error);
+    if (error.code === 11000) {
+      return Response.json({ success: false, error: 'A post with this slug already exists.' }, { status: 400 });
+    }
+    return Response.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
+// DELETE /api/posts/[id] - Delete a post by ID or Slug
+export async function DELETE(request, { params }) {
+  try {
+    await connectDB();
+    const { id } = await params;
+
+    const query = mongoose.Types.ObjectId.isValid(id) ? { _id: id } : { slug: id };
+    const deletedPost = await Post.findOneAndDelete(query);
+
+    if (!deletedPost) {
+      return Response.json({ success: false, error: 'Post not found.' }, { status: 404 });
+    }
+
+    return Response.json({ success: true, message: 'Post deleted successfully.' });
+  } catch (error) {
+    console.error('Error deleting post:', error);
+    return Response.json({ success: false, error: error.message }, { status: 500 });
+  }
+}

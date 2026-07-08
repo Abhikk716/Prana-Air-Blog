@@ -1,0 +1,22 @@
+{
+  "name": "pranaair-test-blog",
+  "version": "1.0.0",
+  "description": "This is the project workspace for the new Prana Air Test Blog system, incorporating a custom MongoDB database, Next.js API Routes, a custom CMS Dashboard with TipTap/Quill rich-text editor, and a WordPress migration utility.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "mongoose": "^9.7.0",
+    "next": "^16.2.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  }
+}
