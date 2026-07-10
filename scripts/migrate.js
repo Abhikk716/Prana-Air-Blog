@@ -22,7 +22,7 @@ function slugify(text) {
 }
 
 // Download image helper that prevents duplicates and runs gracefully
-async function downloadImage(url, destDir, webPrefix) {
+async function downloadImage(url, defaultDestDir, defaultWebPrefix) {
   try {
     const parsedUrl = new URL(url);
     const filename = path.basename(parsedUrl.pathname);
@@ -32,6 +32,17 @@ async function downloadImage(url, destDir, webPrefix) {
       return null;
     }
     
+    let destDir = defaultDestDir;
+    let webPrefix = defaultWebPrefix;
+
+    // Check if the URL has the WordPress /wp-content/uploads/YYYY/MM/ structure
+    const wpUploadsMatch = parsedUrl.pathname.match(/\/wp-content\/uploads\/(\d{4}\/\d{2})/);
+    if (wpUploadsMatch) {
+      const yearMonth = wpUploadsMatch[1]; // e.g. "2026/06"
+      destDir = path.join(PUBLIC_DIR, 'wp-content/uploads', yearMonth);
+      webPrefix = `/wp-content/uploads/${yearMonth}/`;
+    }
+
     const destPath = path.join(destDir, filename);
 
     // Ensure target folder exists
