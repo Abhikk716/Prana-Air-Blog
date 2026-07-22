@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Script from 'next/script';
+import { Editor } from '@tinymce/tinymce-react';
 import './editor.css';
 
 function BlogEditorContent() {
@@ -104,10 +105,8 @@ function BlogEditorContent() {
     setSeoTitle(data.seoTitle);
     setSeoDescription(data.seoDescription);
 
-    // Update Quill
-    if (quillRef.current) {
-      quillRef.current.root.innerHTML = data.content;
-    }
+    // Update TinyMCE
+    setContent(data.content);
 
     setSelectedLang(newLang);
   };
@@ -121,8 +120,7 @@ function BlogEditorContent() {
   const searchParams = useSearchParams();
   const postId = searchParams.get('id'); // Get the post ID if we are editing
 
-  const quillRef = useRef(null);
-  const isLoadedRef = useRef(false);
+  const editorRef = useRef(null);
 
   // 1. Authenticate check on Client Component
   useEffect(() => {
@@ -153,7 +151,7 @@ function BlogEditorContent() {
 
         if (res.ok && data.success) {
           const post = data.data;
-          
+
           const loadedData = {
             en: {
               title: post.title || '',
@@ -214,13 +212,7 @@ function BlogEditorContent() {
     fetchPost();
   }, [postId, authChecked]);
 
-  // 3. Populate Quill content once both Quill and post data are loaded
-  useEffect(() => {
-    if (quillRef.current && content && !isLoadedRef.current) {
-      quillRef.current.root.innerHTML = content;
-      isLoadedRef.current = true;
-    }
-  }, [content, quillLoaded]);
+
 
   // Auto-slugify when title changes (if slug is unlocked or not editing)
   useEffect(() => {
@@ -243,92 +235,15 @@ function BlogEditorContent() {
     }, 4000);
   };
 
-  // Image Upload handler from Quill editor
-  const selectLocalImage = (quillInstance) => {
-    const input = document.createElement('input');
-    input.setAttribute('type', 'file');
-    input.setAttribute('accept', 'image/*');
-    input.click();
-
-    input.onchange = async () => {
-      const file = input.files[0];
-      if (file) {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        showNotification('Uploading image...', 'success');
-
-        try {
-          const res = await fetch('/api/admin/upload', {
-            method: 'POST',
-            body: formData,
-          });
-          const data = await res.json();
-
-          if (res.ok && data.success) {
-            // Insert image into the Quill editor at cursor position
-            const range = quillInstance.getSelection(true);
-            quillInstance.insertEmbed(range.index, 'image', data.url);
-            showNotification('Image uploaded successfully!');
-          } else {
-            showNotification(data.error || 'Upload failed.', 'error');
-          }
-        } catch (err) {
-          console.error(err);
-          showNotification('Network error during image upload.', 'error');
-        }
+  const handleEditorChange = (newContent, editor) => {
+    setContent(newContent);
+    setEditorData(prev => ({
+      ...prev,
+      [selectedLangRef.current]: {
+        ...prev[selectedLangRef.current],
+        content: newContent
       }
-    };
-  };
-
-  // 4. Initialize Quill snow editor
-  const initQuill = () => {
-    if (typeof window !== 'undefined' && window.Quill && !quillRef.current) {
-      const editorContainer = document.getElementById('quill-editor');
-      if (editorContainer) {
-        const q = new window.Quill(editorContainer, {
-          theme: 'snow',
-          placeholder: 'Start writing your story here...',
-          modules: {
-            toolbar: [
-              [{ header: [1, 2, 3, false] }],
-              ['bold', 'italic', 'underline', 'strike'],
-              [{ list: 'ordered' }, { list: 'bullet' }],
-              ['link', 'image'],
-              ['clean'],
-            ],
-          },
-        });
-
-        // Set initial HTML if already loaded
-        if (content) {
-          q.root.innerHTML = content;
-          isLoadedRef.current = true;
-        }
-
-        // Keep content state synced on change
-        q.on('text-change', () => {
-          const newHtml = q.root.innerHTML;
-          setContent(newHtml);
-          setEditorData(prev => ({
-            ...prev,
-            [selectedLangRef.current]: {
-              ...prev[selectedLangRef.current],
-              content: newHtml
-            }
-          }));
-        });
-
-        // Hook image upload button
-        const toolbar = q.getModule('toolbar');
-        toolbar.addHandler('image', () => {
-          selectLocalImage(q);
-        });
-
-        quillRef.current = q;
-        setQuillLoaded(true);
-      }
-    }
+    }));
   };
 
   const handleFeaturedImageUpload = () => {
@@ -407,7 +322,7 @@ function BlogEditorContent() {
     };
 
     const enData = updatedEditorData.en;
-    
+
     if (!enData.title.trim()) {
       showNotification('Please enter a title for English.', 'error');
       return;
@@ -470,7 +385,7 @@ function BlogEditorContent() {
       if (res.ok && result.success) {
         setStatus(postStatus);
         showNotification(`Post successfully saved as ${postStatus}!`);
-        
+
         // Wait and redirect to dashboard
         setTimeout(() => {
           router.push('/admin/dashboard');
@@ -495,13 +410,7 @@ function BlogEditorContent() {
 
   return (
     <div className="editor-container">
-      {/* Dynamic script loading for Quill */}
-      <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" />
-      <Script
-        src="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.js"
-        onLoad={initQuill}
-        strategy="lazyOnload"
-      />
+
 
       {notification.show && (
         <div style={{
@@ -532,10 +441,10 @@ function BlogEditorContent() {
         </div>
         <div className="action-buttons">
           {postId && slug && (
-            <a 
-              href={`/blog/${slug}`} 
-              target="_blank" 
-              rel="noopener noreferrer" 
+            <a
+              href={`/blog/${slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
               className="btn btn-secondary"
               style={{ backgroundColor: '#f1f5f9', color: '#334155', textDecoration: 'none', display: 'flex', alignItems: 'center' }}
             >
@@ -664,7 +573,46 @@ function BlogEditorContent() {
           <div className="form-group">
             <label className="form-label">Content Editor</label>
             <div className="rich-editor-wrapper">
-              <div id="quill-editor" style={{ flexGrow: 1 }}></div>
+              <Editor
+                tinymceScriptSrc="https://cdnjs.cloudflare.com/ajax/libs/tinymce/7.3.0/tinymce.min.js"
+                onInit={(evt, editor) => editorRef.current = editor}
+                value={content}
+                onEditorChange={handleEditorChange}
+                init={{
+                  height: 600,
+                  menubar: true,
+                  plugins: [
+                    'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+                    'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                    'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'codesample'
+                  ],
+                  toolbar: 'undo redo | blocks | ' +
+                    'bold italic forecolor | alignleft aligncenter ' +
+                    'alignright alignjustify | bullist numlist outdent indent | ' +
+                    'image media table | removeformat | code | help',
+                  content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height: 1.6; }',
+                  images_upload_handler: async (blobInfo, progress) => {
+                    return new Promise(async (resolve, reject) => {
+                      const formData = new FormData();
+                      formData.append('file', blobInfo.blob(), blobInfo.filename());
+                      try {
+                        const res = await fetch('/api/admin/upload', {
+                          method: 'POST',
+                          body: formData,
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                          resolve(data.url);
+                        } else {
+                          reject(data.error || 'Upload failed.');
+                        }
+                      } catch (err) {
+                        reject('Network error during image upload.');
+                      }
+                    });
+                  }
+                }}
+              />
             </div>
           </div>
         </div>

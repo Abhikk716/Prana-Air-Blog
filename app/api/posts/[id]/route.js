@@ -60,6 +60,44 @@ export async function GET(request, { params }) {
       post.content = post.content.replace(/src="\/wp-content\//g, 'src="https://www.pranaair.com/wp-content/');
     }
 
+    // Make tables responsive and styled like live WP site
+    if (post.content && post.content.includes('<table')) {
+      const tableStyles = `
+<style>
+  .prose-editorial table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 1.5rem 0 !important;
+    font-size: 0.9rem !important;
+    line-height: 1.5 !important;
+  }
+  .prose-editorial th, .prose-editorial td {
+    border: 1px solid #d1d5db !important;
+    padding: 0.75rem !important;
+    text-align: left !important;
+    word-break: break-word !important;
+    vertical-align: top !important;
+  }
+  .prose-editorial th {
+    font-weight: 700 !important;
+    background-color: #f9fafb !important;
+    color: #374151 !important;
+  }
+  .table-responsive-wrapper {
+    overflow-x: auto;
+    width: 100%;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    border-radius: 0.375rem;
+  }
+</style>
+`;
+      // Remove any existing wrapper to prevent double wrapping if I applied it earlier
+      let cleanContent = post.content.replace(/<div class="table-responsive-wrapper"[^>]*>([\s\S]*?)<\/div>/gi, '$1');
+      post.content = tableStyles + cleanContent.replace(/(<table[^>]*>[\s\S]*?<\/table>)/gi, '<div class="table-responsive-wrapper">$1</div>');
+    }
+
     const translated = translatePost(post, lang);
 
     return Response.json({ success: true, data: translated }, { headers: CORS_HEADERS });
