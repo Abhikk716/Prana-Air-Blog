@@ -4,8 +4,16 @@ export async function POST(request) {
   try {
     const { username, password } = await request.json();
 
-    const expectedUsername = process.env.ADMIN_USERNAME || 'admin';
-    const expectedPassword = process.env.ADMIN_PASSWORD || 'pranaair123';
+    const expectedUsername = process.env.ADMIN_USERNAME;
+    const expectedPassword = process.env.ADMIN_PASSWORD;
+
+    if (!expectedUsername || !expectedPassword) {
+      console.error('Missing ADMIN_USERNAME or ADMIN_PASSWORD in environment variables.');
+      return Response.json(
+        { success: false, error: 'Server configuration error.' },
+        { status: 500 }
+      );
+    }
 
     if (username === expectedUsername && password === expectedPassword) {
       // Set secure HTTP-only cookie

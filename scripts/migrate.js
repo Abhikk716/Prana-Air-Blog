@@ -233,12 +233,18 @@ async function migrate() {
               }
             }
 
+            let authorName = 'Admin';
+            if (wpPost._embedded && wpPost._embedded.author && wpPost._embedded.author.length > 0) {
+              authorName = wpPost._embedded.author[0].name || 'Admin';
+            }
+
             const postData = {
               title,
               slug,
               content: updatedContent,
               excerpt: excerpt || title,
               featuredImage: localFeaturedImage,
+              author: authorName,
               categories,
               tags,
               status: 'published',
@@ -343,12 +349,18 @@ async function migrate() {
           }
         }
 
+        let authorName = 'Admin';
+        if (wpPost._embedded && wpPost._embedded.author && wpPost._embedded.author.length > 0) {
+          authorName = wpPost._embedded.author[0].name || 'Admin';
+        }
+
         const postData = {
           title,
           slug,
           content: updatedContent,
           excerpt,
           featuredImage: localFeaturedImage,
+          author: authorName,
           categories,
           tags,
           status: 'published',
