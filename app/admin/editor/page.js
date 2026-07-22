@@ -531,6 +531,17 @@ function BlogEditorContent() {
           <p>{postId ? 'Update post content and SEO configs in MongoDB' : 'Draft and publish blog content directly to your MongoDB database'}</p>
         </div>
         <div className="action-buttons">
+          {postId && slug && (
+            <a 
+              href={`/blog/${slug}`} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="btn btn-secondary"
+              style={{ backgroundColor: '#f1f5f9', color: '#334155', textDecoration: 'none', display: 'flex', alignItems: 'center' }}
+            >
+              Preview
+            </a>
+          )}
           <button className="btn btn-secondary" onClick={() => handleSave('draft')}>
             Save Draft
           </button>

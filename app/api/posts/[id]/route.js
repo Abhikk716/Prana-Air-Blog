@@ -53,7 +53,13 @@ export async function GET(request, { params }) {
       return Response.json({ success: false, error: 'Post not found.' }, { status: 404, headers: CORS_HEADERS });
     }
 
-    const post = JSON.parse(JSON.stringify(rawPost.toObject({ getters: true, flattenMaps: true })));
+    let post = JSON.parse(JSON.stringify(rawPost.toObject({ getters: true, flattenMaps: true })));
+    
+    // Fix broken relative image paths from WordPress migration
+    if (post.content && post.content.includes('src="/wp-content/')) {
+      post.content = post.content.replace(/src="\/wp-content\//g, 'src="https://www.pranaair.com/wp-content/');
+    }
+
     const translated = translatePost(post, lang);
 
     return Response.json({ success: true, data: translated }, { headers: CORS_HEADERS });
