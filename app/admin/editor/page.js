@@ -580,6 +580,8 @@ function BlogEditorContent() {
                 onEditorChange={handleEditorChange}
                 init={{
                   height: 600,
+                  branding: false,
+                  promotion: false,
                   menubar: true,
                   plugins: [
                     'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
