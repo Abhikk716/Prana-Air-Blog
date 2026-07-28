@@ -26,6 +26,13 @@ function BlogEditorContent() {
   const [seoTitle, setSeoTitle] = useState('');
   const [seoDescription, setSeoDescription] = useState('');
 
+  // Promotion State
+  const [promoImage, setPromoImage] = useState('');
+  const [promoText, setPromoText] = useState('');
+  const [promoLink, setPromoLink] = useState('');
+  const [promoEndDate, setPromoEndDate] = useState('');
+  const [promoActive, setPromoActive] = useState(false);
+
   // Multilingual states
   const [selectedLang, setSelectedLang] = useState('en');
   const selectedLangRef = useRef('en');
@@ -199,6 +206,16 @@ function BlogEditorContent() {
           setAuthor(post.author || 'Admin');
           setCategories(post.categories || []);
           setTags(post.tags || []);
+          
+          if (post.promotion) {
+            setPromoImage(post.promotion.imageUrl || '');
+            setPromoText(post.promotion.text || '');
+            setPromoLink(post.promotion.link || '');
+            setPromoActive(post.promotion.isActive || false);
+            if (post.promotion.endDate) {
+              setPromoEndDate(new Date(post.promotion.endDate).toISOString().split('T')[0]);
+            }
+          }
           setIsSlugLocked(true);
         } else {
           showNotification(data.error || 'Failed to load post.', 'error');
@@ -270,6 +287,41 @@ function BlogEditorContent() {
           if (res.ok && data.success) {
             setFeaturedImage(data.url);
             showNotification('Featured image uploaded successfully!');
+          } else {
+            showNotification(data.error || 'Upload failed.', 'error');
+          }
+        } catch (err) {
+          console.error(err);
+          showNotification('Network error during upload.', 'error');
+        }
+      }
+    };
+  };
+
+  const handlePromoImageUpload = () => {
+    const input = document.createElement('input');
+    input.setAttribute('type', 'file');
+    input.setAttribute('accept', 'image/*');
+    input.click();
+
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (file) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        showNotification('Uploading promo image...', 'success');
+
+        try {
+          const res = await fetch('/api/admin/upload', {
+            method: 'POST',
+            body: formData,
+          });
+          const data = await res.json();
+
+          if (res.ok && data.success) {
+            setPromoImage(data.url);
+            showNotification('Promo image uploaded successfully!');
           } else {
             showNotification(data.error || 'Upload failed.', 'error');
           }
@@ -365,6 +417,13 @@ function BlogEditorContent() {
         description: enData.seoDescription || enData.excerpt || enData.title,
         keywords: [...categories, ...tags],
       },
+      promotion: {
+        imageUrl: promoImage,
+        text: promoText,
+        link: promoLink,
+        endDate: promoEndDate ? new Date(promoEndDate) : null,
+        isActive: promoActive
+      },
       translations: payloadTranslations
     };
 
@@ -386,11 +445,18 @@ function BlogEditorContent() {
         setStatus(postStatus);
         showNotification(`Post successfully saved as ${postStatus}!`);
 
-        // Wait and redirect to dashboard
-        setTimeout(() => {
-          router.push('/admin/dashboard');
-          router.refresh();
-        }, 1000);
+        if (postStatus === 'published') {
+          // Wait and redirect to dashboard
+          setTimeout(() => {
+            router.push('/admin/dashboard');
+            router.refresh();
+          }, 1000);
+        } else {
+          // If saved as draft and it's a new post, update URL so we get the ID for further saves and Preview button
+          if (!postId && result.data && result.data._id) {
+            router.push(`/admin/editor?id=${result.data._id}`);
+          }
+        }
       } else {
         showNotification(result.error || 'Failed to save post.', 'error');
       }
@@ -442,7 +508,7 @@ function BlogEditorContent() {
         <div className="action-buttons">
           {postId && slug && (
             <a
-              href={`/blog/${slug}`}
+              href={`/test-blog/${slug}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-secondary"
@@ -468,7 +534,7 @@ function BlogEditorContent() {
             display: 'flex',
             gap: '0.35rem',
             marginBottom: '1.75rem',
-            borderBottom: '2px solid #f1f5f9',
+            borderBottom: '2px solid #fbfbfbff',
             paddingBottom: '0.75rem',
             flexWrap: 'wrap'
           }}>
@@ -727,6 +793,45 @@ function BlogEditorContent() {
                   </span>
                 ))}
               </div>
+            </div>
+          </div>
+
+          <div className="sidebar-card">
+            <h3 className="sidebar-card-title">Product Promotion Banner</h3>
+            
+            <div className="form-group">
+              <label className="form-label">Banner Image URL</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input type="text" className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', flexGrow: 1 }} placeholder="Image URL or upload..." value={promoImage} onChange={(e) => setPromoImage(e.target.value)} />
+                <button
+                  type="button"
+                  onClick={handlePromoImageUpload}
+                  className="btn btn-secondary"
+                  style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.25rem', whiteSpace: 'nowrap' }}
+                >
+                  Upload
+                </button>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Promotion Text</label>
+              <input type="text" className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }} placeholder="Get 20% off..." value={promoText} onChange={(e) => setPromoText(e.target.value)} />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Destination Link</label>
+              <input type="url" className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }} placeholder="https://..." value={promoLink} onChange={(e) => setPromoLink(e.target.value)} />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">End Date</label>
+              <input type="date" className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }} value={promoEndDate} onChange={(e) => setPromoEndDate(e.target.value)} />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem' }}>
+              <input type="checkbox" id="promoActive" checked={promoActive} onChange={(e) => setPromoActive(e.target.checked)} style={{ width: '16px', height: '16px' }} />
+              <label htmlFor="promoActive" style={{ fontWeight: 600, fontSize: '0.875rem' }}>Enable Banner for this post</label>
             </div>
           </div>
 

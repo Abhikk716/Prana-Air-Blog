@@ -58,6 +58,13 @@ const PostSchema = new mongoose.Schema(
         default: [],
       },
     },
+    promotion: {
+      imageUrl: { type: String, default: '' },
+      text: { type: String, default: '' },
+      link: { type: String, default: '' },
+      endDate: { type: Date, default: null },
+      isActive: { type: Boolean, default: false }
+    },
     publishedAt: {
       type: Date,
       default: null,
@@ -102,4 +109,8 @@ const PostSchema = new mongoose.Schema(
 // Add index on slug for fast queries
 PostSchema.index({ slug: 1 });
 
-module.exports = mongoose.models.Post || mongoose.model('Post', PostSchema);
+// Prevent mongoose caching old schema in Next.js dev
+if (mongoose.models.Post) {
+  delete mongoose.models.Post;
+}
+module.exports = mongoose.model('Post', PostSchema);

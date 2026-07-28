@@ -127,6 +127,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
               fontWeight: 600,
               fontSize: '0.9rem',
               boxShadow: '0 4px 10px rgba(116, 183, 92, 0.25)',
+              textDecoration: 'none'
             }}
           >
             + Create New Post
@@ -353,7 +354,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                         Edit
                       </a>
                       <a
-                        href={`/blog/${post.slug}`}
+                        href={`/test-blog/${post.slug}`}
                         target="_blank"
                         style={{
                           fontSize: '0.85rem',
