@@ -34,7 +34,7 @@ export default async function AdminDashboard() {
   });
 
   return (
-    <div className="admin-dashboard-page" style={{ padding: '2rem 1rem' }}>
+    <div className="admin-dashboard-page">
       <DashboardClient initialPosts={serializedPosts} categories={uniqueCategories} />
     </div>
   );

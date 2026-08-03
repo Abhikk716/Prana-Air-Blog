@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 
 export default function HeaderNav() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const activeTab = searchParams.get('tab') || 'analytics';
 
   const checkAuth = async () => {
     try {
@@ -44,35 +46,58 @@ export default function HeaderNav() {
   };
 
   if (loading) {
-    return (
-      <nav className="nav-links">
-        <a href="/" className="nav-item">Home</a>
-      </nav>
-    );
+    return <nav className="nav-links" style={{ minHeight: '40px' }}></nav>;
   }
+
+  const linkStyle = (isActive) => ({
+    padding: '0.5rem 1rem',
+    borderRadius: '8px',
+    fontWeight: 600,
+    fontSize: '0.95rem',
+    textDecoration: 'none',
+    transition: 'all 0.2s',
+    backgroundColor: isActive ? 'rgba(116, 183, 92, 0.1)' : 'transparent',
+    color: isActive ? '#74b75c' : '#4b5563',
+  });
 
   return (
     <nav className="nav-links">
-      {isAuthenticated ? (
+      {isAuthenticated && (
         <>
-          <a href="/admin/dashboard" className="nav-item">Dashboard</a>
+          <a 
+            href="/admin/dashboard?tab=analytics" 
+            style={linkStyle(pathname === '/admin/dashboard' && activeTab === 'analytics')}
+          >
+            Analytics
+          </a>
+          <a 
+            href="/admin/dashboard?tab=posts" 
+            style={linkStyle(pathname === '/admin/dashboard' && activeTab === 'posts')}
+          >
+            All Posts
+          </a>
+          <div style={{ width: '1px', height: '24px', backgroundColor: '#e5e7eb', margin: '0 0.5rem' }}></div>
           <button 
             onClick={handleLogout} 
-            className="nav-item" 
             style={{ 
-              background: 'none', 
-              border: 'none', 
+              background: 'transparent', 
+              border: '1px solid #ef4444', 
               cursor: 'pointer', 
               fontFamily: 'inherit',
-              fontSize: 'inherit',
-              fontWeight: 500,
-              padding: 0
+              fontSize: '0.9rem',
+              fontWeight: 600,
+              padding: '0.4rem 1rem',
+              borderRadius: '6px',
+              color: '#ef4444',
+              transition: 'all 0.2s'
             }}
+            onMouseOver={(e) => e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.05)'}
+            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
           >
             Logout
           </button>
         </>
-      ) : null}
+      )}
     </nav>
   );
 }

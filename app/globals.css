@@ -64,6 +64,13 @@ a {
   margin: 0 auto;
 }
 
+@media (max-width: 768px) {
+  .main-content {
+    padding: 2rem 1rem 3rem;
+  }
+}
+
+
 /* Premium Header (Glassmorphic) */
 .main-header {
   position: sticky;
@@ -82,6 +89,8 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 .logo {
@@ -104,6 +113,19 @@ a {
   display: flex;
   align-items: center;
   gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .nav-links {
+    gap: 0.75rem;
+    width: 100%;
+    justify-content: center;
+  }
+  .logo {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 .nav-item {
@@ -610,3 +632,92 @@ a {
   margin-bottom: 1rem;
   opacity: 0.5;
 }
+
+/* Dashboard Responsive Styles */
+.dashboard-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem 0;
+}
+
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 0;
+  }
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1.5rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .dashboard-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.dashboard-filters {
+  margin-bottom: 1.5rem;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-filters > input,
+.dashboard-filters > select {
+  flex: 1 1 150px;
+  min-width: 120px;
+}
+
+.dashboard-filter-count {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-left: auto;
+}
+
+@media (max-width: 768px) {
+  .dashboard-filter-count {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+.dashboard-table-container {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: var(--shadow-lg);
+}
+
+.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  min-width: 800px; /* Ensures it doesn't squish on mobile, causing horizontal scroll instead */
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+@media (max-width: 480px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

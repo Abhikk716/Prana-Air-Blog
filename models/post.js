@@ -69,6 +69,15 @@ const PostSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    analytics: {
+      views: { type: Number, default: 0 },
+      viewsByLang: {
+        type: Map,
+        of: Number,
+        default: {}
+      },
+      promotionClicks: { type: Number, default: 0 }
+    },
     translations: {
       type: Map,
       of: {

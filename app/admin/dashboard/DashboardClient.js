@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
 
 export default function DashboardClient({ initialPosts, categories = [] }) {
   const [posts, setPosts] = useState(initialPosts);
@@ -12,6 +13,14 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   const [loadingId, setLoadingId] = useState(null);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab') || 'analytics';
+  
+  const [activeTab, setActiveTab] = useState(tabParam);
+
+  useEffect(() => {
+    setActiveTab(searchParams.get('tab') || 'analytics');
+  }, [searchParams]);
 
   // Handle post deletion
   const handleDelete = async (postId, postTitle) => {
@@ -98,68 +107,46 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   };
 
   return (
-    <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '1rem 0' }}>
+    <div className="dashboard-container">
       {/* Dashboard Top Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '2.5rem',
-        borderBottom: '1px solid #e5e7eb',
-        paddingBottom: '1.5rem',
-      }}>
+      <div className="dashboard-header">
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 800, margin: 0, color: '#1f2937' }}>
-            CMS Dashboard
+            {activeTab === 'analytics' ? 'Analytics' : 'CMS Dashboard'}
           </h1>
           <p style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '0.25rem' }}>
-            Manage your blog posts, draft articles, and track SEO metrics.
+            {activeTab === 'analytics' 
+              ? 'Track your blog performance, views, and banner clicks.'
+              : 'Manage your blog posts, draft articles, and track SEO metrics.'
+            }
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <a
-            href="/admin/editor"
-            style={{
-              padding: '0.6rem 1.25rem',
-              background: 'linear-gradient(135deg, #74b75c, #5e9e48)',
-              color: 'white',
-              borderRadius: '8px',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              boxShadow: '0 4px 10px rgba(116, 183, 92, 0.25)',
-              textDecoration: 'none'
-            }}
-          >
-            + Create New Post
-          </a>
-          <button
-            onClick={handleLogout}
-            disabled={logoutLoading}
-            style={{
-              padding: '0.6rem 1.25rem',
-              backgroundColor: 'transparent',
-              border: '1px solid #ef4444',
-              color: '#ef4444',
-              borderRadius: '8px',
-              fontWeight: 600,
-              fontSize: '0.9rem',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-            onMouseOver={(e) => {
-              e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.backgroundColor = 'transparent';
-            }}
-          >
-            {logoutLoading ? 'Logging out...' : 'Log Out'}
-          </button>
-        </div>
+        
+        {activeTab === 'posts' && (
+          <div style={{ display: 'flex', gap: '1rem' }}>
+            <a
+              href="/admin/editor"
+              style={{
+                padding: '0.6rem 1.25rem',
+                background: 'linear-gradient(135deg, #74b75c, #5e9e48)',
+                color: 'white',
+                borderRadius: '8px',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                boxShadow: '0 4px 10px rgba(116, 183, 92, 0.25)',
+                textDecoration: 'none'
+              }}
+            >
+              + Create New Post
+            </a>
+          </div>
+        )}
       </div>
 
-      {/* Filter and Search Controls */}
-      <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '1rem' }}>
+      {activeTab === 'posts' && (
+        <>
+          {/* Filter and Search Controls */}
+      <div className="dashboard-filters">
         <input
           type="text"
           placeholder="Search by title or author..."
@@ -236,31 +223,15 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
           <option value="oldest">Oldest First</option>
         </select>
 
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          color: '#6b7280',
-          fontSize: '0.9rem',
-          marginLeft: 'auto'
-        }}>
+        <div className="dashboard-filter-count">
           Showing {filteredPosts.length} of {posts.length} posts
         </div>
       </div>
 
       {/* Posts Table List */}
-      <div style={{
-        backgroundColor: '#ffffff',
-        border: '1px solid #e5e7eb',
-        borderRadius: '12px',
-        overflow: 'hidden',
-        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.02)',
-      }}>
+      <div className="dashboard-table-container">
         {filteredPosts.length > 0 ? (
-          <table style={{
-            width: '100%',
-            borderCollapse: 'collapse',
-            textAlign: 'left',
-          }}>
+          <table className="dashboard-table">
             <thead>
               <tr style={{
                 borderBottom: '1px solid #e5e7eb',
@@ -396,6 +367,144 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
           </div>
         )}
       </div>
+      </>
+      )}
+
+      {activeTab === 'analytics' && (
+        <div style={{ padding: '1rem 0' }}>
+          {(() => {
+            const totalViews = posts.reduce((sum, post) => sum + (post.analytics?.views || 0), 0);
+            const totalClicks = posts.reduce((sum, post) => sum + (post.analytics?.promotionClicks || 0), 0);
+            const totalCTR = totalViews > 0 ? ((totalClicks / totalViews) * 100).toFixed(2) : '0.00';
+            const publishedCount = posts.filter(p => p.status === 'published').length;
+
+            // Aggregate language data with all supported languages pre-filled
+            const supportedLangs = ['en', 'hi', 'es', 'de', 'fr', 'ru', 'ja'];
+            const langViews = supportedLangs.reduce((acc, lang) => {
+              acc[lang] = 0;
+              return acc;
+            }, {});
+
+            posts.forEach(post => {
+              if (post.analytics?.viewsByLang) {
+                Object.entries(post.analytics.viewsByLang).forEach(([lang, views]) => {
+                  if (langViews[lang] !== undefined) {
+                    langViews[lang] += views;
+                  }
+                });
+              }
+            });
+            
+            const chartData = supportedLangs.map(lang => ({
+              name: lang.toUpperCase(),
+              views: langViews[lang]
+            }));
+
+            const colors = ['#74b75c', '#0891b2', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b'];
+
+            return (
+              <>
+                <div className="analytics-grid">
+                  <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                    <div style={{ color: '#6b7280', fontSize: '0.9rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Total Views</div>
+                    <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#1f2937' }}>
+                      {totalViews.toLocaleString()}
+                    </div>
+                  </div>
+                  <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                    <div style={{ color: '#6b7280', fontSize: '0.9rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Banner Clicks</div>
+                    <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#74b75c' }}>
+                      {totalClicks.toLocaleString()}
+                    </div>
+                  </div>
+                  <div style={{ background: '#fff', border: '2px solid rgba(116, 183, 92, 0.2)', borderRadius: '12px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 4px 12px rgba(116, 183, 92, 0.1)' }}>
+                    <div style={{ color: '#74b75c', fontSize: '0.9rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Average CTR %</div>
+                    <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#1f2937' }}>
+                      {totalCTR}%
+                    </div>
+                  </div>
+                  <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+                    <div style={{ color: '#6b7280', fontSize: '0.9rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Published Posts</div>
+                    <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#1f2937' }}>
+                      {publishedCount}
+                    </div>
+                  </div>
+                </div>
+
+                {chartData.length > 0 && (
+                  <div style={{ marginBottom: '3rem' }}>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '0.5rem' }}>Audience Insights (Views by Language)</h3>
+                    <p style={{ color: '#6b7280', fontSize: '0.9rem', marginBottom: '1.5rem' }}>Discover which languages are driving the most traffic to your content.</p>
+                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem 1rem 1rem 1rem', height: '350px' }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData} margin={{ top: 20, right: 30, left: -10, bottom: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 600 }} dy={10} />
+                          <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} allowDecimals={false} />
+                          <Tooltip 
+                            cursor={{ fill: 'rgba(0,0,0,0.02)' }}
+                            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontWeight: 600 }} 
+                            formatter={(value) => [`${value} Views`, 'Views']}
+                          />
+                          <Bar dataKey="views" radius={[8, 8, 0, 0]} barSize={25} animationDuration={1000}>
+                            {chartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.views > 0 ? '#74b75c' : '#e5e7eb'} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '1rem' }}>Top Performing Posts</h3>
+                <div className="dashboard-table-container">
+                  <table className="dashboard-table">
+                    <thead>
+                      <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                        <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Post Title</th>
+                        <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Total Views</th>
+                        <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Banner Clicks</th>
+                        <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>CTR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {[...posts]
+                        .sort((a, b) => (b.analytics?.views || 0) - (a.analytics?.views || 0))
+                        .slice(0, 10)
+                        .map(post => {
+                          const v = post.analytics?.views || 0;
+                          const c = post.analytics?.promotionClicks || 0;
+                          const ctr = v > 0 ? ((c / v) * 100).toFixed(1) : '0.0';
+                          const isHighCTR = parseFloat(ctr) > 10.0;
+                          
+                          return (
+                            <tr key={post._id} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                              <td style={{ padding: '1rem', fontWeight: 600, color: '#1f2937' }}>
+                                <a href={`/admin/editor?id=${post._id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                                  {post.title}
+                                </a>
+                              </td>
+                              <td style={{ padding: '1rem', color: '#4b5563', fontWeight: 500 }}>
+                                {v.toLocaleString()}
+                              </td>
+                              <td style={{ padding: '1rem', color: '#4b5563', fontWeight: 500 }}>
+                                {c.toLocaleString()}
+                              </td>
+                              <td style={{ padding: '1rem', color: isHighCTR ? '#15803d' : '#4b5563', fontWeight: isHighCTR ? 700 : 500, backgroundColor: isHighCTR ? 'rgba(34, 197, 94, 0.1)' : 'transparent' }}>
+                                {ctr}%
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
     </div>
   );
 }
