@@ -8,7 +8,7 @@ import TableOfContents from '../components/TableOfContents';
 
 function translatePost(post, lang) {
   if (!lang || lang === 'en') return post;
-  
+
   const translations = post.translations;
   if (!translations) return post;
 
@@ -196,15 +196,15 @@ export default async function BlogPostPage(props) {
                 className="editorial-content prose-editorial"
                 dangerouslySetInnerHTML={{
                   __html: post.content.replace(
-                      /(?:https?:\/\/[^\/]+)?\/?wp-content\/uploads\/([^"'\s>]+)/gi,
-                      (match, filePart) => {
-                        const cleanPath = `/wp-content/uploads/${filePart}`;
-                        const bypassSecret = process.env.NEXT_PUBLIC_VERCEL_BYPASS_SECRET || process.env.VERCEL_BYPASS_SECRET || 'kvgxx9053m0tNdDFjYcNE1UCj4dpSGHd';
-                        if (!bypassSecret) return cleanPath;
-                        const separator = cleanPath.includes('?') ? '&' : '?';
-                        return `${cleanPath}${separator}x-vercel-protection-bypass=${bypassSecret}`;
-                      }
-                    )
+                    /(?:https?:\/\/[^\/]+)?\/?wp-content\/uploads\/([^"'\s>]+)/gi,
+                    (match, filePart) => {
+                      const cleanPath = `/wp-content/uploads/${filePart}`;
+                      const bypassSecret = process.env.NEXT_PUBLIC_VERCEL_BYPASS_SECRET || process.env.VERCEL_BYPASS_SECRET || 'kvgxx9053m0tNdDFjYcNE1UCj4dpSGHd';
+                      if (!bypassSecret) return cleanPath;
+                      const separator = cleanPath.includes('?') ? '&' : '?';
+                      return `${cleanPath}${separator}x-vercel-protection-bypass=${bypassSecret}`;
+                    }
+                  )
                 }}
               />
 
@@ -236,23 +236,23 @@ export default async function BlogPostPage(props) {
           <aside className="editorial-right-col">
             <div className="sticky-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
               <TableOfContents contentSelector=".editorial-content" />
-              
+
               {promotion && (
-                <a 
-                  href={promotion.link} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
+                <a
+                  href={promotion.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="promotion-banner-card"
                 >
                   {/* Subtle "Featured" Tag */}
                   <div style={{ position: 'absolute', top: '12px', left: '12px', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '0.65rem', padding: '4px 8px', borderRadius: '4px', fontWeight: '700', letterSpacing: '0.05em', textTransform: 'uppercase', backdropFilter: 'blur(4px)', zIndex: 2 }}>
                     Featured
                   </div>
-                  
+
                   <div style={{ width: '100%', aspectRatio: '16/10', overflow: 'hidden' }}>
                     <img src={promotion.imageUrl} alt="Promotion" />
                   </div>
-                  
+
                   <div style={{ padding: '1.25rem', background: '#ffffff', borderTop: '3px solid #74b75c' }}>
                     <div style={{ color: '#1f2937', fontWeight: 800, fontSize: '1.05rem', lineHeight: '1.4', marginBottom: '0.75rem' }}>
                       {promotion.text}
