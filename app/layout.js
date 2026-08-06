@@ -1,4 +1,7 @@
 import { Suspense } from 'react';
+import 'swiper/css';
+import 'swiper/css/navigation';
+import 'swiper/css/pagination';
 import './globals.css';
 import HeaderNav from './components/HeaderNav';
 

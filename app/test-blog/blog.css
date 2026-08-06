@@ -657,13 +657,13 @@ a {
 
 .editorial-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 40px;
 }
 
 @media (min-width: 1024px) {
   .editorial-grid {
-    grid-template-columns: 80px 1fr 250px;
+    grid-template-columns: 80px minmax(0, 1fr) 250px;
     gap: 60px;
   }
 }
@@ -806,15 +806,17 @@ a {
 .prose-editorial p {
   margin-bottom: 1.5em;
   color: #1d1d1d;
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .prose-editorial h2,
-.prose-editorial h3 {
-  font-family: 'Playfair Display', Georgia, serif;
+.prose-editorial h4 {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 1.25rem;
+  font-weight: 600;
   color: #111827;
-  margin-top: 2em;
-  margin-bottom: 1em;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .prose-editorial h2 {
@@ -822,6 +824,10 @@ a {
 }
 
 .prose-editorial h3 {
+  font-family: 'Playfair Display', Georgia, serif;
+  color: #111827;
+  margin-top: 2em;
+  margin-bottom: 1em;
   font-size: 1.5rem;
 }
 
@@ -1158,15 +1164,25 @@ a {
 }
 
 .editorial-main-col {
+  width: 100%;
   max-width: 100%;
   overflow-x: hidden;
+  min-width: 0;
+  /* Fix grid blowout */
 }
 
 @media (min-width: 1024px) {
   .editorial-main-col {
+    width: 100%;
     max-width: 850px;
     margin: 0 auto;
+    min-width: 0;
   }
+}
+
+.prose-editorial * {
+  max-width: 100%;
+  word-wrap: break-word;
 }
 
 /* 2. Truncate 'In this article' sidebar links */
@@ -1384,6 +1400,7 @@ a {
     flex: 1;
   }
 }
+
 /* Promotion Banner Card styling */
 .promotion-banner-card {
   display: flex;
@@ -1393,14 +1410,14 @@ a {
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid #eaeaea;
-  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.01);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
 }
 
 .promotion-banner-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
 .promotion-banner-card img {
@@ -1412,4 +1429,102 @@ a {
 
 .promotion-banner-card:hover img {
   transform: scale(1.05);
+}
+
+/* Custom Swiper Styles */
+.swiper {
+  --swiper-theme-color: #252525;
+  --swiper-navigation-color: #252525;
+  --swiper-pagination-color: #252525;
+  --swiper-navigation-size: 20px;
+  /* Slightly smaller */
+  max-width: 100%;
+  min-width: 0;
+  margin: 2rem 0;
+  border-radius: 12px;
+}
+
+.swiper-slide img,
+.prose-editorial .swiper-slide img {
+  margin: 0 auto !important;
+  /* Center the image */
+  border-radius: 0;
+  width: auto !important;
+  /* Don't stretch small images */
+  max-width: 100% !important;
+  /* Fit within slider if large */
+  height: auto !important;
+  object-fit: contain;
+  display: block !important;
+}
+
+.swiper-button-next,
+.swiper-button-prev {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  width: auto !important;
+  height: auto !important;
+}
+
+.swiper-button-next:after,
+.swiper-button-prev:after {
+  font-weight: 900;
+  /* Bolder for visibility without background */
+  text-shadow: 0 1px 4px rgba(255, 255, 255, 0.8);
+  /* Add slight white glow so it's visible on dark images */
+}
+
+/* FAQ Block Styles */
+.prana-faq-block {
+  margin: 2rem 0;
+}
+
+.prana-faq-item {
+  background: #fff;
+  border: 1px solid #e5e7eb96;
+  border-radius: 20px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  box-shadow: 0 2px 20px #00000008;
+}
+
+.prana-faq-item summary {
+  color: #111827;
+  cursor: pointer;
+  outline: none;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  font-family: Inter, sans-serif;
+  font-size: 1.3rem;
+  font-weight: 500;
+  list-style: none;
+  display: flex;
+}
+
+.prana-faq-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.prana-faq-item summary::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid #6b7280;
+  border-bottom: 2px solid #6b7280;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.3s ease;
+}
+
+.prana-faq-item[open] summary::after {
+  transform: translateY(2px) rotate(-135deg);
+}
+
+.prana-faq-content {
+  padding: 0 1.5rem 1.25rem 1.5rem;
+  color: #6b7280;
+  font-size: 1rem;
+  line-height: 1.6;
 }

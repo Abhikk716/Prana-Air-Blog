@@ -5,6 +5,7 @@ import Link from 'next/link';
 import BlogImage from '../BlogImage';
 import '../blog.css';
 import TableOfContents from '../components/TableOfContents';
+import RichContent from '../components/RichContent';
 
 function translatePost(post, lang) {
   if (!lang || lang === 'en') return post;
@@ -192,20 +193,17 @@ export default async function BlogPostPage(props) {
             <article className="editorial-article">
 
               {/* HTML Content Body */}
-              <div
-                className="editorial-content prose-editorial"
-                dangerouslySetInnerHTML={{
-                  __html: post.content.replace(
-                    /(?:https?:\/\/[^\/]+)?\/?wp-content\/uploads\/([^"'\s>]+)/gi,
-                    (match, filePart) => {
-                      const cleanPath = `/wp-content/uploads/${filePart}`;
-                      const bypassSecret = process.env.NEXT_PUBLIC_VERCEL_BYPASS_SECRET || process.env.VERCEL_BYPASS_SECRET || 'kvgxx9053m0tNdDFjYcNE1UCj4dpSGHd';
-                      if (!bypassSecret) return cleanPath;
-                      const separator = cleanPath.includes('?') ? '&' : '?';
-                      return `${cleanPath}${separator}x-vercel-protection-bypass=${bypassSecret}`;
-                    }
-                  )
-                }}
+              <RichContent
+                html={post.content.replace(
+                  /(?:https?:\/\/[^\/]+)?\/?wp-content\/uploads\/([^"'\s>]+)/gi,
+                  (match, filePart) => {
+                    const cleanPath = `/wp-content/uploads/${filePart}`;
+                    const bypassSecret = process.env.NEXT_PUBLIC_VERCEL_BYPASS_SECRET || process.env.VERCEL_BYPASS_SECRET || 'kvgxx9053m0tNdDFjYcNE1UCj4dpSGHd';
+                    if (!bypassSecret) return cleanPath;
+                    const separator = cleanPath.includes('?') ? '&' : '?';
+                    return `${cleanPath}${separator}x-vercel-protection-bypass=${bypassSecret}`;
+                  }
+                )}
               />
 
               {/* Tags */}

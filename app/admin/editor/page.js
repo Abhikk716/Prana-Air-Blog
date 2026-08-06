@@ -206,7 +206,7 @@ function BlogEditorContent() {
           setAuthor(post.author || 'Admin');
           setCategories(post.categories || []);
           setTags(post.tags || []);
-          
+
           if (post.promotion) {
             setPromoImage(post.promotion.imageUrl || '');
             setPromoText(post.promotion.text || '');
@@ -654,10 +654,66 @@ function BlogEditorContent() {
                     'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
                     'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'codesample'
                   ],
-                  toolbar: 'undo redo | blocks | ' +
+                  toolbar: 'undo redo | mediaslider statsblock expertinsight faqblock | blocks | ' +
                     'bold italic forecolor | alignleft aligncenter ' +
                     'alignright alignjustify | bullist numlist outdent indent | ' +
                     'image media table | removeformat | code | help',
+                  setup: (editor) => {
+                    editor.ui.registry.addButton('mediaslider', {
+                      text: 'Media Slider',
+                      tooltip: 'Insert a Gallery Box (Auto-converts to slider)',
+                      onAction: () => {
+                        editor.insertContent(`
+                          <div class="prana-gallery-box" style="border: 2px dashed #74b75c; padding: 20px; background: #f9f9f9; border-radius: 8px; margin: 2rem 0; min-height: 100px;">
+                            <p style="text-align: center; color: #74b75c; font-weight: bold; margin-bottom: 1rem;">--- Add your slider images below this line ---</p>
+                            <p><br></p>
+                          </div><p><br></p>
+                        `);
+                      }
+                    });
+                    editor.ui.registry.addButton('statsblock', {
+                      text: 'Stats Block',
+                      tooltip: 'Insert 3-column stats block',
+                      onAction: () => {
+                        editor.insertContent('<div class="custom-stats-block" style="background-color: #FAF6ED; border-radius: 20px; padding: 3rem 2rem; display: flex; justify-content: space-around; text-align: center; margin: 3rem 0; flex-wrap: wrap; gap: 2rem;"><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">64%</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">LOWER PM2.5</div></div><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">3.2x</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">BETTER SLEEP SCORE</div></div><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">92%</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">REPORTED FEWER HEADACHES</div></div></div><p><br></p>');
+                      }
+                    });
+                    editor.ui.registry.addButton('faqblock', {
+                      text: 'FAQ Block',
+                      tooltip: 'Insert a collapsible FAQ section',
+                      onAction: () => {
+                        editor.insertContent(`
+                          <div class="prana-faq-block">
+                            <details class="prana-faq-item">
+                              <summary>Do I need an air purifier in every room?</summary>
+                              <div class="prana-faq-content">
+                                <p>Start with the bedroom. It's where you spend a third of your life, and where measurable health gains compound the fastest.</p>
+                              </div>
+                            </details>
+                            <details class="prana-faq-item">
+                              <summary>What AQI is safe indoors?</summary>
+                              <div class="prana-faq-content">
+                                <p>Write your answer here.</p>
+                              </div>
+                            </details>
+                            <details class="prana-faq-item">
+                              <summary>Do houseplants really clean air?</summary>
+                              <div class="prana-faq-content">
+                                <p>Write your answer here.</p>
+                              </div>
+                            </details>
+                          </div><p><br></p>
+                        `);
+                      }
+                    });
+                    editor.ui.registry.addButton('expertinsight', {
+                      text: 'Expert Insight',
+                      tooltip: 'Insert Expert Insight block',
+                      onAction: () => {
+                        editor.insertContent('<div class="custom-expert-insight" style="background-color: #F1F6EC; border-radius: 20px; padding: 3rem; margin: 3rem 0;"><div style="margin-bottom: 1.5rem;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 2L11.5 8.5L18 10L11.5 11.5L10 18L8.5 11.5L2 10L8.5 8.5L10 2Z" fill="#2E5A44"/></svg></div><h3 style="font-family: \'Playfair Display\', Georgia, serif; font-size: 1.75rem; font-weight: 700; color: #111827; margin-top: 0; margin-bottom: 1.5rem;">Expert insight</h3><p style="font-size: 1.15rem; color: #4B5563; font-style: normal; margin-bottom: 2rem; line-height: 1.7;">"A purifier that runs at 35% all day will out-perform one that runs at 100% for an hour. Indoor air is a long-form problem."</p><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #6B7280; letter-spacing: 1.5px;">DR. MIRA LINDQVIST — INDOOR ENVIRONMENTS LAB, STOCKHOLM</div></div><p><br></p>');
+                      }
+                    });
+                  },
                   content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height: 1.6; }',
                   images_upload_handler: async (blobInfo, progress) => {
                     return new Promise(async (resolve, reject) => {
@@ -798,7 +854,7 @@ function BlogEditorContent() {
 
           <div className="sidebar-card">
             <h3 className="sidebar-card-title">Product Promotion Banner</h3>
-            
+
             <div className="form-group">
               <label className="form-label">Banner Image URL</label>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
