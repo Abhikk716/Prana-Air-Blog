@@ -35,6 +35,32 @@ export async function POST(request) {
       return NextResponse.json({ success: false, error: 'Post not found' }, { status: 404 });
     }
 
+    // Upsert Daily Analytics
+    try {
+      const DailyAnalytics = require('../../../../models/DailyAnalytics');
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      let dailyUpdate = {};
+      if (action === 'view') {
+        dailyUpdate = { $inc: { views: 1 } };
+        if (lang) {
+          dailyUpdate.$inc[`viewsByLang.${lang}`] = 1;
+        }
+      } else if (action === 'promotion_click') {
+        dailyUpdate = { $inc: { promotionClicks: 1 } };
+      }
+
+      await DailyAnalytics.findOneAndUpdate(
+        { postId: post._id, date: today },
+        dailyUpdate,
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    } catch (dailyErr) {
+      console.error('Failed to update daily analytics:', dailyErr);
+      // We don't fail the whole request just because daily analytics failed
+    }
+
     // Set CORS headers so the main frontend can call this endpoint
     return NextResponse.json(
       { success: true },
