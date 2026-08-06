@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import './globals.css';
 import HeaderNav from './components/HeaderNav';
 
@@ -34,7 +35,9 @@ export default function RootLayout({ children }) {
               <a href="/" className="logo">
                 Prana Air <span className="logo-accent">Blog</span>
               </a>
-              <HeaderNav />
+              <Suspense fallback={null}>
+                <HeaderNav />
+              </Suspense>
             </div>
           </header>
 
