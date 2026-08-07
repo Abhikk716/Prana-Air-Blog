@@ -1,5 +1,4 @@
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
+import { put } from '@vercel/blob';
 import { cookies } from 'next/headers';
 
 export async function POST(request) {
@@ -18,30 +17,23 @@ export async function POST(request) {
       return Response.json({ success: false, error: 'No file uploaded.' }, { status: 400 });
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-
-    // Ensure the folder exists
-    const uploadFolder = join(process.cwd(), 'public/uploads/content');
-    await mkdir(uploadFolder, { recursive: true });
-
-    // Generate unique filename to avoid overwrites
-    const timestamp = Date.now();
+    // Use Vercel Blob instead of local filesystem
     const cleanName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
-    const filename = `${timestamp}-${cleanName}`;
     
-    const filePath = join(uploadFolder, filename);
+    // Upload to Vercel Blob
+    const blob = await put(`uploads/content/${cleanName}`, file, {
+      access: 'public',
+      addRandomSuffix: true // Vercel Blob automatically handles unique naming
+    });
 
-    // Save image to local uploads folder
-    await writeFile(filePath, buffer);
-    console.log(`Saved uploaded image to: ${filePath}`);
+    console.log(`Saved uploaded image to Vercel Blob: ${blob.url}`);
 
     return Response.json({
       success: true,
-      url: `/uploads/content/${filename}`
+      url: blob.url
     });
   } catch (error) {
     console.error('File upload api error:', error);
-    return Response.json({ success: false, error: 'Failed to upload image.' }, { status: 500 });
+    return Response.json({ success: false, error: 'Failed to upload image. Make sure BLOB_READ_WRITE_TOKEN is set.' }, { status: 500 });
   }
 }
