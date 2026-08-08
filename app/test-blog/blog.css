@@ -663,8 +663,8 @@ a {
 
 @media (min-width: 1024px) {
   .editorial-grid {
-    grid-template-columns: 80px minmax(0, 1fr) 250px;
-    gap: 60px;
+    grid-template-columns: 40px 1fr 350px;
+    gap: 0px;
   }
 }
 
