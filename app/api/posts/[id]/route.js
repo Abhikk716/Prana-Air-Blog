@@ -1,5 +1,6 @@
 import connectDB from '../../../../lib/db';
 import Post from '../../../../models/post';
+import BannerSettings from '../../../../models/BannerSettings';
 import mongoose from 'mongoose';
 
 // CORS headers
@@ -55,6 +56,37 @@ export async function GET(request, { params }) {
 
     let post = JSON.parse(JSON.stringify(rawPost.toObject({ getters: true, flattenMaps: true })));
     
+    let promotions = [];
+    if (post.promotion && post.promotion.isActive && post.promotion.endDate) {
+      if (new Date(post.promotion.endDate) >= new Date()) {
+        promotions.push(post.promotion);
+      }
+    }
+
+    if (promotions.length === 0) {
+      const banners = await BannerSettings.find({});
+      if (post.categories && post.categories.length > 0) {
+        for (const cat of post.categories) {
+          const catBanners = banners.filter(b => b.type === 'category' && b.categories?.includes(cat) && b.promotion?.isActive);
+          for (const catBanner of catBanners) {
+            if (new Date(catBanner.promotion.endDate) >= new Date()) {
+              if (!promotions.some(p => p.imageUrl === catBanner.promotion.imageUrl && p.text === catBanner.promotion.text)) {
+                promotions.push(catBanner.promotion);
+              }
+            }
+          }
+        }
+      }
+
+      if (promotions.length === 0) {
+        const globalBanner = banners.find(b => b.type === 'global' && b.promotion?.isActive);
+        if (globalBanner && new Date(globalBanner.promotion.endDate) >= new Date()) {
+          promotions.push(globalBanner.promotion);
+        }
+      }
+    }
+    post.promotions = promotions;
+
     // Fix broken relative image paths from WordPress migration
     if (post.content && post.content.includes('src="/wp-content/')) {
       post.content = post.content.replace(/src="\/wp-content\//g, 'src="https://www.pranaair.com/wp-content/');
