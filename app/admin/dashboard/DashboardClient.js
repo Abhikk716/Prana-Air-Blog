@@ -10,7 +10,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
-  
+
   // Analytics filters & state
   const [analyticsTimeFilter, setAnalyticsTimeFilter] = useState('all');
   const [analyticsCategoryFilter, setAnalyticsCategoryFilter] = useState('all');
@@ -22,7 +22,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get('tab') || 'analytics';
-  
+
   const [activeTab, setActiveTab] = useState(tabParam);
 
   useEffect(() => {
@@ -140,7 +140,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   const handleBannerDelete = async () => {
     if (!editingBanner._id || editingBanner.type === 'global') return;
     if (!confirm('Are you sure you want to delete this banner campaign?')) return;
-    
+
     try {
       const res = await fetch('/api/admin/banners?id=' + editingBanner._id, { method: 'DELETE' });
       if (res.ok) {
@@ -174,7 +174,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
       setDailyData([]);
       return;
     }
-    
+
     // Don't fetch if custom is selected but dates aren't filled
     if (analyticsTimeFilter === 'custom' && (!customStartDate || !customEndDate)) {
       return;
@@ -185,7 +185,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
       try {
         let start = new Date();
         let end = new Date();
-        
+
         if (analyticsTimeFilter === '7d') {
           start.setDate(start.getDate() - 7);
         } else if (analyticsTimeFilter === '30d') {
@@ -371,7 +371,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
       dailyData.forEach(d => {
         const post = d.postId; // Populated post object
         if (!post) return;
-        
+
         if (analyticsCategoryFilter !== 'all' && (!post.categories || !post.categories.includes(analyticsCategoryFilter))) {
           return;
         }
@@ -456,13 +456,13 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
             {activeTab === 'analytics' ? 'Analytics' : 'CMS Dashboard'}
           </h1>
           <p style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '0.25rem' }}>
-            {activeTab === 'analytics' 
+            {activeTab === 'analytics'
               ? 'Track your blog performance, views, and banner clicks.'
               : 'Manage your blog posts, draft articles, and track SEO metrics.'
             }
           </p>
         </div>
-        
+
         {activeTab === 'posts' && (
           <div style={{ display: 'flex', gap: '1rem' }}>
             <a
@@ -608,7 +608,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
 
       {activeTab === 'analytics' && (
         <div style={{ padding: '1rem 0' }}>
-          
+
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
               <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Time Range</label>
@@ -624,7 +624,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 <option value="custom">Custom Date Range</option>
               </select>
             </div>
-            
+
             {analyticsTimeFilter === 'custom' && (
               <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
@@ -695,8 +695,8 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                         <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 600 }} dy={10} />
                         <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} allowDecimals={false} />
-                        <Tooltip 
-                          contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontWeight: 600 }} 
+                        <Tooltip
+                          contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontWeight: 600 }}
                         />
                         <Line type="monotone" dataKey="views" stroke="#74b75c" strokeWidth={3} dot={{ r: 4, fill: '#74b75c', strokeWidth: 0 }} activeDot={{ r: 6 }} />
                       </LineChart>
@@ -720,7 +720,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                             outerRadius={100}
                             paddingAngle={5}
                             dataKey="views"
-                            // Removed label to prevent overlap
+                          // Removed label to prevent overlap
                           >
                             {categoryChartData.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -743,9 +743,9 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                           <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 600 }} dy={10} />
                           <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} allowDecimals={false} />
-                          <Tooltip 
+                          <Tooltip
                             cursor={{ fill: 'rgba(0,0,0,0.02)' }}
-                            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontWeight: 600 }} 
+                            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontWeight: 600 }}
                           />
                           <Bar dataKey="views" radius={[4, 4, 0, 0]} barSize={12}>
                             {langChartData.map((entry, index) => (
@@ -774,7 +774,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                     {campaignPerformance.length > 0 ? campaignPerformance.map((campaign, i) => {
                       const ctr = campaign.views > 0 ? ((campaign.clicks / campaign.views) * 100).toFixed(1) : '0.0';
                       const isHighCTR = parseFloat(ctr) > 5.0;
-                      
+
                       return (
                         <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
                           <td style={{ padding: '1rem', fontWeight: 600, color: '#1f2937' }}>{campaign.name}</td>
@@ -809,7 +809,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                     {topPosts.map(({ post, views, clicks }) => {
                       const ctr = views > 0 ? ((clicks / views) * 100).toFixed(1) : '0.0';
                       const isHighCTR = parseFloat(ctr) > 10.0;
-                      
+
                       return (
                         <tr key={post._id} style={{ borderBottom: '1px solid #e5e7eb' }}>
                           <td style={{ padding: '1rem', fontWeight: 600, color: '#1f2937' }}>
@@ -869,7 +869,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 {editingBanner.type === 'global' ? 'Global Banner Settings' : (editingBanner._id ? 'Edit Campaign' : 'New Campaign')}
               </h3>
               {editingBanner.type === 'category' && editingBanner._id && (
-                 <button onClick={handleBannerDelete} style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 600, cursor: 'pointer' }}>Delete Campaign</button>
+                <button onClick={handleBannerDelete} style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 600, cursor: 'pointer' }}>Delete Campaign</button>
               )}
             </div>
 
@@ -892,8 +892,8 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f9fafb', padding: '1rem', borderRadius: '8px', border: '1px solid #e5e7eb', maxHeight: '200px', overflowY: 'auto' }}>
                       {categories.map((cat, i) => (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             id={`cat-${i}`}
                             checked={(editingBanner.categories || []).includes(cat)}
                             onChange={() => handleCategoryCheckbox(cat)}
@@ -916,8 +916,8 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                     style={{ flexGrow: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb' }}
                     placeholder="https://..."
                   />
-                  <button 
-                    onClick={handleBannerImageUpload} 
+                  <button
+                    onClick={handleBannerImageUpload}
                     style={{ padding: '0.75rem 1.25rem', background: '#f3f4f6', border: '1px solid #e5e7eb', color: '#4b5563', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
                     onMouseOver={(e) => e.target.style.backgroundColor = '#e5e7eb'}
                     onMouseOut={(e) => e.target.style.backgroundColor = '#f3f4f6'}
