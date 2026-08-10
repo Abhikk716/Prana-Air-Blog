@@ -689,7 +689,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
               {analyticsTimeFilter !== 'all' && timeChartData.length > 0 && (
                 <div style={{ marginBottom: '3rem', marginTop: '3rem' }}>
                   <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '0.5rem' }}>Views Over Time</h3>
-                  <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem 1rem 1rem 1rem', height: '350px' }}>
+                  <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem 1rem 1rem 1rem', height: '380px', minWidth: 0, overflow: 'hidden' }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={timeChartData} margin={{ top: 20, right: 30, left: -10, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
@@ -705,11 +705,11 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem', marginBottom: '3rem', marginTop: '3rem' }}>
+              <div className="charts-grid">
                 {categoryChartData.length > 0 && (
                   <div>
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '0.5rem' }}>Views by Category</h3>
-                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem 1rem 1rem 1rem', height: '350px' }}>
+                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem 1rem 1rem 1rem', height: '380px', minWidth: 0, overflow: 'hidden' }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
@@ -727,7 +727,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                             ))}
                           </Pie>
                           <Tooltip />
-                          <Legend layout="vertical" verticalAlign="middle" align="right" />
+                          <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{ paddingTop: '20px' }} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -737,7 +737,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 {langChartData.length > 0 && (
                   <div>
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '0.5rem' }}>Views by Language</h3>
-                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem 1rem 1rem 1rem', height: '350px' }}>
+                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem 1rem 1rem 1rem', height: '380px', minWidth: 0, overflow: 'hidden' }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={langChartData} margin={{ top: 20, right: 30, left: -10, bottom: 5 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />

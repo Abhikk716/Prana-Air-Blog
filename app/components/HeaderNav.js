@@ -6,6 +6,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 export default function HeaderNav() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -61,10 +62,15 @@ export default function HeaderNav() {
   });
 
   return (
-    <nav className="nav-links">
-      {isAuthenticated && (
-        <>
-          <a 
+    <>
+      <button className="mobile-menu-btn" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+        ☰
+      </button>
+      <nav className={`nav-links ${isMenuOpen ? 'open' : ''}`}>
+        {isAuthenticated && (
+          <>
+            <a 
+              onClick={() => setIsMenuOpen(false)}
             href="/admin/dashboard?tab=analytics" 
             style={linkStyle(pathname === '/admin/dashboard' && activeTab === 'analytics')}
           >
@@ -72,19 +78,24 @@ export default function HeaderNav() {
           </a>
           <a 
             href="/admin/dashboard?tab=posts" 
+            onClick={() => setIsMenuOpen(false)}
             style={linkStyle(pathname === '/admin/dashboard' && activeTab === 'posts')}
           >
             All Posts
           </a>
           <a 
             href="/admin/dashboard?tab=banners" 
+            onClick={() => setIsMenuOpen(false)}
             style={linkStyle(pathname === '/admin/dashboard' && activeTab === 'banners')}
           >
             Banners
           </a>
           <div style={{ width: '1px', height: '24px', backgroundColor: '#e5e7eb', margin: '0 0.5rem' }}></div>
           <button 
-            onClick={handleLogout} 
+            onClick={() => {
+              setIsMenuOpen(false);
+              handleLogout();
+            }} 
             style={{ 
               background: 'transparent', 
               border: '1px solid #ef4444', 
@@ -103,7 +114,8 @@ export default function HeaderNav() {
             Logout
           </button>
         </>
-      )}
-    </nav>
+        )}
+      </nav>
+    </>
   );
 }
