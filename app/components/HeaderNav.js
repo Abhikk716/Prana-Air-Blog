@@ -76,6 +76,12 @@ export default function HeaderNav() {
           >
             All Posts
           </a>
+          <a 
+            href="/admin/dashboard?tab=banners" 
+            style={linkStyle(pathname === '/admin/dashboard' && activeTab === 'banners')}
+          >
+            Banners
+          </a>
           <div style={{ width: '1px', height: '24px', backgroundColor: '#e5e7eb', margin: '0 0.5rem' }}></div>
           <button 
             onClick={handleLogout} 

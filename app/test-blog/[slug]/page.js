@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import connectDB from '../../../lib/db';
 import Post from '../../../models/post';
+import BannerSettings from '../../../models/BannerSettings';
 import Link from 'next/link';
 import BlogImage from '../BlogImage';
 import '../blog.css';
@@ -98,10 +99,37 @@ export default async function BlogPostPage(props) {
     notFound();
   }
 
-  let promotion = null;
+  let promotions = [];
   if (rawPost.promotion && rawPost.promotion.isActive && rawPost.promotion.endDate) {
     if (new Date(rawPost.promotion.endDate) >= new Date()) {
-      promotion = rawPost.promotion;
+      promotions.push(rawPost.promotion);
+    }
+  }
+
+  if (promotions.length === 0) {
+    const banners = await BannerSettings.find({});
+    
+    // Check Category Banners First
+    if (rawPost.categories && rawPost.categories.length > 0) {
+      for (const cat of rawPost.categories) {
+        const catBanners = banners.filter(b => b.type === 'category' && b.categories?.includes(cat) && b.promotion?.isActive);
+        for (const catBanner of catBanners) {
+          if (new Date(catBanner.promotion.endDate) >= new Date()) {
+            // Avoid duplicates
+            if (!promotions.some(p => p.imageUrl === catBanner.promotion.imageUrl && p.text === catBanner.promotion.text)) {
+              promotions.push(catBanner.promotion);
+            }
+          }
+        }
+      }
+    }
+
+    // Check Global Banner if still no promotion
+    if (promotions.length === 0) {
+      const globalBanner = banners.find(b => b.type === 'global' && b.promotion?.isActive);
+      if (globalBanner && new Date(globalBanner.promotion.endDate) >= new Date()) {
+        promotions.push(globalBanner.promotion);
+      }
     }
   }
 
@@ -235,12 +263,14 @@ export default async function BlogPostPage(props) {
             <div className="sticky-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
               <TableOfContents contentSelector=".editorial-content" />
 
-              {promotion && (
+              {promotions.length > 0 && promotions.map((promo, idx) => (
                 <a
-                  href={promotion.link}
+                  key={idx}
+                  href={promo.link}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="promotion-banner-card"
+                  style={{ marginBottom: '1.5rem', display: 'block' }}
                 >
                   {/* Subtle "Featured" Tag */}
                   <div style={{ position: 'absolute', top: '12px', left: '12px', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '0.65rem', padding: '4px 8px', borderRadius: '4px', fontWeight: '700', letterSpacing: '0.05em', textTransform: 'uppercase', backdropFilter: 'blur(4px)', zIndex: 2 }}>
@@ -248,12 +278,12 @@ export default async function BlogPostPage(props) {
                   </div>
 
                   <div style={{ width: '100%', aspectRatio: '16/10', overflow: 'hidden' }}>
-                    <img src={promotion.imageUrl} alt="Promotion" />
+                    <img src={promo.imageUrl} alt="Promotion" />
                   </div>
 
                   <div style={{ padding: '1.25rem', background: '#ffffff', borderTop: '3px solid #74b75c' }}>
                     <div style={{ color: '#1f2937', fontWeight: 800, fontSize: '1.05rem', lineHeight: '1.4', marginBottom: '0.75rem' }}>
-                      {promotion.text}
+                      {promo.text}
                     </div>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#74b75c', fontSize: '0.85rem', fontWeight: 700 }}>
                       Learn More
@@ -261,7 +291,7 @@ export default async function BlogPostPage(props) {
                     </div>
                   </div>
                 </a>
-              )}
+              ))}
             </div>
           </aside>
 

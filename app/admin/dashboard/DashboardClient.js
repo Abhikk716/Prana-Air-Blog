@@ -29,6 +29,142 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
     setActiveTab(searchParams.get('tab') || 'analytics');
   }, [searchParams]);
 
+  const [bannerSettings, setBannerSettings] = useState([]);
+  const [loadingBanners, setLoadingBanners] = useState(false);
+  const [editingBanner, setEditingBanner] = useState({
+    type: 'global',
+    category: '',
+    promotion: { imageUrl: '', text: '', link: '', endDate: '', isActive: false }
+  });
+
+  const [activeBannerTab, setActiveBannerTab] = useState('global');
+
+  useEffect(() => {
+    fetchBanners();
+  }, []);
+
+  const fetchBanners = async () => {
+    setLoadingBanners(true);
+    try {
+      const res = await fetch('/api/admin/banners');
+      const data = await res.json();
+      if (data.success) {
+        setBannerSettings(data.banners);
+        loadBannerToEdit('global', data.banners);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingBanners(false);
+    }
+  };
+
+  const handleBannerImageUpload = () => {
+    const input = document.createElement('input');
+    input.setAttribute('type', 'file');
+    input.setAttribute('accept', 'image/*');
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (file) {
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+          const res = await fetch('/api/admin/upload', { method: 'POST', body: formData });
+          const data = await res.json();
+          if (res.ok) {
+            setEditingBanner(prev => ({
+              ...prev,
+              promotion: {
+                ...prev.promotion,
+                imageUrl: data.url
+              }
+            }));
+          } else {
+            alert(data.error || 'Upload failed.');
+          }
+        } catch (err) {
+          alert('Network error during upload.');
+        }
+      }
+    };
+    input.click();
+  };
+
+  const handleSaveBanner = async () => {
+    try {
+      const res = await fetch('/api/admin/banners', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editingBanner)
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Banner saved successfully');
+        fetchBanners();
+      } else {
+        alert(data.error || 'Failed to save banner');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error');
+    }
+  };
+
+  const loadBannerToEdit = (id, banners = bannerSettings) => {
+    setActiveBannerTab(id);
+    if (id === 'global') {
+      const existing = banners.find(b => b.type === 'global');
+      if (existing) {
+        setEditingBanner(existing);
+      } else {
+        setEditingBanner({
+          type: 'global',
+          promotion: { imageUrl: '', text: '', link: '', endDate: '', isActive: false }
+        });
+      }
+    } else if (id === 'new') {
+      setEditingBanner({
+        type: 'category',
+        name: 'New Campaign',
+        categories: [],
+        promotion: { imageUrl: '', text: '', link: '', endDate: '', isActive: false }
+      });
+    } else {
+      const existing = banners.find(b => b._id === id);
+      if (existing) {
+        setEditingBanner(existing);
+      }
+    }
+  };
+
+  const handleBannerDelete = async () => {
+    if (!editingBanner._id || editingBanner.type === 'global') return;
+    if (!confirm('Are you sure you want to delete this banner campaign?')) return;
+    
+    try {
+      const res = await fetch('/api/admin/banners?id=' + editingBanner._id, { method: 'DELETE' });
+      if (res.ok) {
+        fetchBanners();
+        setActiveBannerTab('global');
+      } else {
+        alert('Failed to delete banner');
+      }
+    } catch (err) {
+      alert('Network error');
+    }
+  };
+
+  const handleCategoryCheckbox = (cat) => {
+    setEditingBanner(prev => {
+      const currentCats = prev.categories || [];
+      if (currentCats.includes(cat)) {
+        return { ...prev, categories: currentCats.filter(c => c !== cat) };
+      } else {
+        return { ...prev, categories: [...currentCats, cat] };
+      }
+    });
+  };
+
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
@@ -158,7 +294,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   };
 
   // Compute analytics data based on filters
-  const { metrics, langChartData, categoryChartData, timeChartData, topPosts } = useMemo(() => {
+  const { metrics, langChartData, categoryChartData, timeChartData, topPosts, campaignPerformance } = useMemo(() => {
     const supportedLangs = ['en', 'hi', 'es', 'de', 'fr', 'ru', 'ja'];
     let totalViews = 0;
     let totalClicks = 0;
@@ -166,6 +302,37 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
     const catViews = {};
     const timeViewsMap = {};
     const postViewsMap = {};
+
+    const campaignStats = {};
+    if (bannerSettings && bannerSettings.length > 0) {
+      bannerSettings.forEach(b => {
+        const id = b.type === 'global' ? 'global' : b._id;
+        campaignStats[id] = {
+          name: b.type === 'global' ? 'Global Banner' : (b.name || 'Unnamed Campaign'),
+          views: 0,
+          clicks: 0
+        };
+      });
+    }
+
+    const getBannerForPost = (post) => {
+      if (post.promotion && post.promotion.isActive && new Date(post.promotion.endDate) >= new Date()) {
+        return null; // Post specific
+      }
+      if (post.categories && post.categories.length > 0) {
+        for (const cat of post.categories) {
+          const catBanner = bannerSettings.find(b => b.type === 'category' && b.categories?.includes(cat) && b.promotion?.isActive);
+          if (catBanner && new Date(catBanner.promotion.endDate) >= new Date()) {
+            return catBanner._id;
+          }
+        }
+      }
+      const global = bannerSettings.find(b => b.type === 'global' && b.promotion?.isActive);
+      if (global && new Date(global.promotion.endDate) >= new Date()) {
+        return 'global';
+      }
+      return null;
+    };
 
     if (analyticsTimeFilter === 'all') {
       // Use initialPosts data
@@ -189,6 +356,12 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
           post.categories.forEach(cat => {
             catViews[cat] = (catViews[cat] || 0) + v;
           });
+        }
+
+        const bannerId = getBannerForPost(post);
+        if (bannerId && campaignStats[bannerId]) {
+          campaignStats[bannerId].views += v;
+          campaignStats[bannerId].clicks += c;
         }
 
         postViewsMap[post._id] = { post, views: v, clicks: c };
@@ -216,6 +389,12 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
           post.categories.forEach(cat => {
             catViews[cat] = (catViews[cat] || 0) + (d.views || 0);
           });
+        }
+
+        const bannerId = getBannerForPost(post);
+        if (bannerId && campaignStats[bannerId]) {
+          campaignStats[bannerId].views += (d.views || 0);
+          campaignStats[bannerId].clicks += (d.promotionClicks || 0);
         }
 
         const dateStr = new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -253,14 +432,19 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
       .sort((a, b) => b.views - a.views)
       .slice(0, 10);
 
+    const campaignPerformance = Object.values(campaignStats)
+      .filter(c => c.views > 0 || c.clicks > 0)
+      .sort((a, b) => b.views - a.views);
+
     return {
       metrics: { totalViews, totalClicks, totalCTR, publishedCount },
       langChartData,
       categoryChartData,
       timeChartData,
-      topPosts
+      topPosts,
+      campaignPerformance
     };
-  }, [posts, dailyData, analyticsTimeFilter, analyticsCategoryFilter]);
+  }, [posts, dailyData, analyticsTimeFilter, analyticsCategoryFilter, bannerSettings]);
 
   const COLORS = ['#74b75c', '#0891b2', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b', '#10b981'];
 
@@ -543,7 +727,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                             ))}
                           </Pie>
                           <Tooltip />
-                          <Legend />
+                          <Legend layout="vertical" verticalAlign="middle" align="right" />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -563,7 +747,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                             cursor={{ fill: 'rgba(0,0,0,0.02)' }}
                             contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontWeight: 600 }} 
                           />
-                          <Bar dataKey="views" radius={[8, 8, 0, 0]} barSize={25}>
+                          <Bar dataKey="views" radius={[4, 4, 0, 0]} barSize={12}>
                             {langChartData.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={entry.views > 0 ? '#0891b2' : '#e5e7eb'} />
                             ))}
@@ -573,6 +757,41 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                     </div>
                   </div>
                 )}
+              </div>
+
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '1rem' }}>Campaign Performance</h3>
+              <div className="dashboard-table-container" style={{ marginBottom: '3rem' }}>
+                <table className="dashboard-table">
+                  <thead>
+                    <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                      <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Campaign Name</th>
+                      <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Total Views</th>
+                      <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Banner Clicks</th>
+                      <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>CTR</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {campaignPerformance.length > 0 ? campaignPerformance.map((campaign, i) => {
+                      const ctr = campaign.views > 0 ? ((campaign.clicks / campaign.views) * 100).toFixed(1) : '0.0';
+                      const isHighCTR = parseFloat(ctr) > 5.0;
+                      
+                      return (
+                        <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                          <td style={{ padding: '1rem', fontWeight: 600, color: '#1f2937' }}>{campaign.name}</td>
+                          <td style={{ padding: '1rem', color: '#4b5563', fontWeight: 500 }}>{campaign.views.toLocaleString()}</td>
+                          <td style={{ padding: '1rem', color: '#4b5563', fontWeight: 500 }}>{campaign.clicks.toLocaleString()}</td>
+                          <td style={{ padding: '1rem', color: isHighCTR ? '#15803d' : '#4b5563', fontWeight: isHighCTR ? 700 : 500, backgroundColor: isHighCTR ? 'rgba(34, 197, 94, 0.1)' : 'transparent' }}>
+                            {ctr}%
+                          </td>
+                        </tr>
+                      );
+                    }) : (
+                      <tr>
+                        <td colSpan="4" style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>No campaign data available for this period.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
 
               <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '1rem' }}>Top Performing Posts</h3>
@@ -615,6 +834,150 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {activeTab === 'banners' && (
+        <div style={{ padding: '1rem 0' }}>
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => loadBannerToEdit('global')}
+              style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', backgroundColor: activeBannerTab === 'global' ? '#74b75c' : '#e5e7eb', color: activeBannerTab === 'global' ? 'white' : '#4b5563' }}
+            >
+              Global Banner
+            </button>
+            {bannerSettings.filter(b => b.type === 'category').map((banner) => (
+              <button
+                key={banner._id}
+                onClick={() => loadBannerToEdit(banner._id)}
+                style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', backgroundColor: activeBannerTab === banner._id ? '#74b75c' : '#e5e7eb', color: activeBannerTab === banner._id ? 'white' : '#4b5563' }}
+              >
+                {banner.name || 'Unnamed Campaign'}
+              </button>
+            ))}
+            <button
+              onClick={() => loadBannerToEdit('new')}
+              style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', fontWeight: 600, border: '1px dashed #74b75c', cursor: 'pointer', backgroundColor: activeBannerTab === 'new' ? '#74b75c' : 'transparent', color: activeBannerTab === 'new' ? 'white' : '#74b75c' }}
+            >
+              + Create Campaign
+            </button>
+          </div>
+
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', margin: 0 }}>
+                {editingBanner.type === 'global' ? 'Global Banner Settings' : (editingBanner._id ? 'Edit Campaign' : 'New Campaign')}
+              </h3>
+              {editingBanner.type === 'category' && editingBanner._id && (
+                 <button onClick={handleBannerDelete} style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 600, cursor: 'pointer' }}>Delete Campaign</button>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gap: '1.5rem', maxWidth: '600px' }}>
+              {editingBanner.type === 'category' && (
+                <>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>Campaign Name</label>
+                    <input
+                      type="text"
+                      value={editingBanner.name || ''}
+                      onChange={e => setEditingBanner({ ...editingBanner, name: e.target.value })}
+                      style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                      placeholder="e.g. Summer Sale 2026"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>Target Categories</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f9fafb', padding: '1rem', borderRadius: '8px', border: '1px solid #e5e7eb', maxHeight: '200px', overflowY: 'auto' }}>
+                      {categories.map((cat, i) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <input 
+                            type="checkbox" 
+                            id={`cat-${i}`}
+                            checked={(editingBanner.categories || []).includes(cat)}
+                            onChange={() => handleCategoryCheckbox(cat)}
+                          />
+                          <label htmlFor={`cat-${i}`} style={{ fontSize: '0.9rem', color: '#4b5563' }}>{cat}</label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>Image URL</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input
+                    type="text"
+                    value={editingBanner.promotion?.imageUrl || ''}
+                    onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, imageUrl: e.target.value } })}
+                    style={{ flexGrow: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                    placeholder="https://..."
+                  />
+                  <button 
+                    onClick={handleBannerImageUpload} 
+                    style={{ padding: '0.75rem 1.25rem', background: '#f3f4f6', border: '1px solid #e5e7eb', color: '#4b5563', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
+                    onMouseOver={(e) => e.target.style.backgroundColor = '#e5e7eb'}
+                    onMouseOut={(e) => e.target.style.backgroundColor = '#f3f4f6'}
+                  >
+                    Upload
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>Promotion Text</label>
+                <input
+                  type="text"
+                  value={editingBanner.promotion?.text || ''}
+                  onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, text: e.target.value } })}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                  placeholder="Get 20% off..."
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>Destination Link</label>
+                <input
+                  type="text"
+                  value={editingBanner.promotion?.link || ''}
+                  onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, link: e.target.value } })}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>End Date</label>
+                <input
+                  type="date"
+                  value={editingBanner.promotion?.endDate ? new Date(editingBanner.promotion.endDate).toISOString().split('T')[0] : ''}
+                  onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, endDate: e.target.value } })}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <input
+                  type="checkbox"
+                  id="isActive"
+                  checked={editingBanner.promotion?.isActive || false}
+                  onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, isActive: e.target.checked } })}
+                  style={{ width: '1.25rem', height: '1.25rem' }}
+                />
+                <label htmlFor="isActive" style={{ fontWeight: 600, color: '#4b5563' }}>Enable this banner</label>
+              </div>
+
+              <button
+                onClick={handleSaveBanner}
+                style={{ marginTop: '1rem', padding: '0.75rem 1.5rem', background: '#74b75c', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '1rem' }}
+              >
+                Save Banner
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
