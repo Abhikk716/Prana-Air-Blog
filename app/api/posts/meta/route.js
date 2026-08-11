@@ -31,7 +31,7 @@ export async function GET() {
     const categories = Object.entries(categoryCounts).map(([name, count]) => ({ name, count }));
 
     // Popular posts (latest 4)
-    const popularRaw = await Post.find({ status: 'published' }, 'slug title publishedAt')
+    const popularRaw = await Post.find({ status: 'published' }, 'slug title publishedAt featuredImage')
       .sort({ publishedAt: -1 })
       .limit(4)
       .lean();
