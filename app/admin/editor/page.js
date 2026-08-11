@@ -31,6 +31,7 @@ function BlogEditorContent() {
   const [promoImage, setPromoImage] = useState('');
   const [promoText, setPromoText] = useState('');
   const [promoLink, setPromoLink] = useState('');
+  const [promoPlacement, setPromoPlacement] = useState('sidebar');
   const [promoEndDate, setPromoEndDate] = useState('');
   const [promoActive, setPromoActive] = useState(false);
 
@@ -221,6 +222,7 @@ function BlogEditorContent() {
             setPromoImage(post.promotion.imageUrl || '');
             setPromoText(post.promotion.text || '');
             setPromoLink(post.promotion.link || '');
+            setPromoPlacement(post.promotion.placement || 'sidebar');
             setPromoActive(post.promotion.isActive || false);
             if (post.promotion.endDate) {
               setPromoEndDate(new Date(post.promotion.endDate).toISOString().split('T')[0]);
@@ -431,6 +433,7 @@ function BlogEditorContent() {
         imageUrl: promoImage,
         text: promoText,
         link: promoLink,
+        placement: promoPlacement,
         endDate: promoEndDate ? new Date(promoEndDate) : null,
         isActive: promoActive
       },
@@ -907,6 +910,15 @@ function BlogEditorContent() {
             <div className="form-group">
               <label className="form-label">Destination Link</label>
               <input type="url" className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }} placeholder="https://..." value={promoLink} onChange={(e) => setPromoLink(e.target.value)} />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Placement</label>
+              <select className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', backgroundColor: '#fff' }} value={promoPlacement} onChange={(e) => setPromoPlacement(e.target.value)}>
+                <option value="sidebar">Sidebar</option>
+                <option value="post_top">Inside Post (Top)</option>
+                <option value="post_bottom">Inside Post (Bottom)</option>
+              </select>
             </div>
 
             <div className="form-group">

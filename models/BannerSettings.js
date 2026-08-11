@@ -19,6 +19,7 @@ const BannerSettingsSchema = new mongoose.Schema(
       imageUrl: { type: String, default: '' },
       text: { type: String, default: '' },
       link: { type: String, default: '' },
+      placement: { type: String, enum: ['sidebar', 'post_top', 'post_bottom'], default: 'sidebar' },
       endDate: { type: Date, default: null },
       isActive: { type: Boolean, default: false }
     }

@@ -34,7 +34,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   const [editingBanner, setEditingBanner] = useState({
     type: 'global',
     category: '',
-    promotion: { imageUrl: '', text: '', link: '', endDate: '', isActive: false }
+    promotion: { imageUrl: '', text: '', link: '', placement: 'sidebar', endDate: '', isActive: false }
   });
 
   const [activeBannerTab, setActiveBannerTab] = useState('global');
@@ -119,7 +119,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
       } else {
         setEditingBanner({
           type: 'global',
-          promotion: { imageUrl: '', text: '', link: '', endDate: '', isActive: false }
+          promotion: { imageUrl: '', text: '', link: '', placement: 'sidebar', endDate: '', isActive: false }
         });
       }
     } else if (id === 'new') {
@@ -127,7 +127,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
         type: 'category',
         name: 'New Campaign',
         categories: [],
-        promotion: { imageUrl: '', text: '', link: '', endDate: '', isActive: false }
+        promotion: { imageUrl: '', text: '', link: '', placement: 'sidebar', endDate: '', isActive: false }
       });
     } else {
       const existing = banners.find(b => b._id === id);
@@ -947,6 +947,19 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                   style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb' }}
                   placeholder="https://..."
                 />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>Placement</label>
+                <select
+                  value={editingBanner.promotion?.placement || 'sidebar'}
+                  onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, placement: e.target.value } })}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb', backgroundColor: '#fff', outline: 'none' }}
+                >
+                  <option value="sidebar">Sidebar</option>
+                  <option value="post_top">Inside Post (Top)</option>
+                  <option value="post_bottom">Inside Post (Bottom)</option>
+                </select>
               </div>
 
               <div>

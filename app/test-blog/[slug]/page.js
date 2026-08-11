@@ -136,13 +136,43 @@ export default async function BlogPostPage(props) {
   const p = JSON.parse(JSON.stringify(rawPost.toObject ? rawPost.toObject() : rawPost));
   const post = translatePost(p, lang);
 
-  // Formatting date helper
   const calculateReadingTime = (text) => {
     const wordsPerMinute = 200;
     const noOfWords = text ? text.split(/\s+/).length : 0;
     const minutes = Math.ceil(noOfWords / wordsPerMinute);
     return minutes > 0 ? minutes : 1;
   };
+
+  const sidebarPromotions = promotions.filter(p => !p.placement || p.placement === 'sidebar');
+  const topPromotions = promotions.filter(p => p.placement === 'post_top');
+  const bottomPromotions = promotions.filter(p => p.placement === 'post_bottom');
+
+  const renderBanner = (promo, idx) => (
+    <a
+      key={idx}
+      href={promo.link}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="promotion-banner-card"
+      style={{ marginBottom: '1.5rem', display: 'block' }}
+    >
+      <div style={{ position: 'absolute', top: '12px', left: '12px', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '0.65rem', padding: '4px 8px', borderRadius: '4px', fontWeight: '700', letterSpacing: '0.05em', textTransform: 'uppercase', backdropFilter: 'blur(4px)', zIndex: 2 }}>
+        Featured
+      </div>
+      <div style={{ width: '100%', aspectRatio: '16/10', overflow: 'hidden' }}>
+        <img src={promo.imageUrl} alt="Promotion" />
+      </div>
+      <div style={{ padding: '1.25rem', background: '#ffffff', borderTop: '3px solid #74b75c' }}>
+        <div style={{ color: '#1f2937', fontWeight: 800, fontSize: '1.05rem', lineHeight: '1.4', marginBottom: '0.75rem' }}>
+          {promo.text}
+        </div>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#74b75c', fontSize: '0.85rem', fontWeight: 700 }}>
+          Learn More
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"></path><path d="M12 5l7 7-7 7"></path></svg>
+        </div>
+      </div>
+    </a>
+  );
 
   const formatDate = (dateString) => {
     if (!dateString) return '';
@@ -220,6 +250,12 @@ export default async function BlogPostPage(props) {
           <main className="editorial-main-col">
             <article className="editorial-article">
 
+              {topPromotions.length > 0 && (
+                <div className="editorial-top-promotions">
+                  {topPromotions.map((promo, idx) => renderBanner(promo, `top-${idx}`))}
+                </div>
+              )}
+
               {/* HTML Content Body */}
               <RichContent
                 html={post.content.replace(
@@ -233,6 +269,12 @@ export default async function BlogPostPage(props) {
                   }
                 )}
               />
+
+              {bottomPromotions.length > 0 && (
+                <div className="editorial-bottom-promotions" style={{ marginTop: '2rem' }}>
+                  {bottomPromotions.map((promo, idx) => renderBanner(promo, `bottom-${idx}`))}
+                </div>
+              )}
 
               {/* Tags */}
               {post.tags && post.tags.length > 0 && (
@@ -263,35 +305,7 @@ export default async function BlogPostPage(props) {
             <div className="sticky-sidebar" style={{ display: 'flex', flexDirection: 'column', gap: '2.5rem' }}>
               <TableOfContents contentSelector=".editorial-content" />
 
-              {promotions.length > 0 && promotions.map((promo, idx) => (
-                <a
-                  key={idx}
-                  href={promo.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="promotion-banner-card"
-                  style={{ marginBottom: '1.5rem', display: 'block' }}
-                >
-                  {/* Subtle "Featured" Tag */}
-                  <div style={{ position: 'absolute', top: '12px', left: '12px', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '0.65rem', padding: '4px 8px', borderRadius: '4px', fontWeight: '700', letterSpacing: '0.05em', textTransform: 'uppercase', backdropFilter: 'blur(4px)', zIndex: 2 }}>
-                    Featured
-                  </div>
-
-                  <div style={{ width: '100%', aspectRatio: '16/10', overflow: 'hidden' }}>
-                    <img src={promo.imageUrl} alt="Promotion" />
-                  </div>
-
-                  <div style={{ padding: '1.25rem', background: '#ffffff', borderTop: '3px solid #74b75c' }}>
-                    <div style={{ color: '#1f2937', fontWeight: 800, fontSize: '1.05rem', lineHeight: '1.4', marginBottom: '0.75rem' }}>
-                      {promo.text}
-                    </div>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#74b75c', fontSize: '0.85rem', fontWeight: 700 }}>
-                      Learn More
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"></path><path d="M12 5l7 7-7 7"></path></svg>
-                    </div>
-                  </div>
-                </a>
-              ))}
+              {sidebarPromotions.length > 0 && sidebarPromotions.map((promo, idx) => renderBanner(promo, `sidebar-${idx}`))}
             </div>
           </aside>
 

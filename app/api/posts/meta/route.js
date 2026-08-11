@@ -28,7 +28,10 @@ export async function GET() {
         });
       }
     });
-    const categories = Object.entries(categoryCounts).map(([name, count]) => ({ name, count }));
+    const categories = Object.entries(categoryCounts)
+      .map(([name, count]) => ({ name, count }))
+      .filter(cat => cat.name !== 'カテゴリーなし' && cat.name !== 'Uncategorized')
+      .sort((a, b) => b.count - a.count);
 
     // Popular posts (latest 4)
     const popularRaw = await Post.find({ status: 'published' }, 'slug title publishedAt featuredImage')
