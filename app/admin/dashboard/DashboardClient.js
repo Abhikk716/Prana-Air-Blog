@@ -295,7 +295,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
 
   // Compute analytics data based on filters
   const { metrics, langChartData, categoryChartData, timeChartData, topPosts, campaignPerformance } = useMemo(() => {
-    const supportedLangs = ['en', 'hi', 'es', 'de', 'fr', 'ru', 'ja'];
+    const supportedLangs = ['en', 'in', 'us', 'en-GB', 'en-CA', 'en-AU', 'sg', 'hi', 'fr', 'de', 'es', 'ru', 'ja', 'pt-PT'];
     let totalViews = 0;
     let totalClicks = 0;
     const langViews = supportedLangs.reduce((acc, lang) => ({ ...acc, [lang]: 0 }), {});
@@ -562,7 +562,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
             </select>
           </div>
 
-          <div className="dashboard-table-container">
+          <div className="dashboard-table-container" style={{ borderRadius: '16px', border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}>
             {filteredPosts.length > 0 ? (
               <table className="dashboard-table">
                 <thead>
@@ -668,21 +668,21 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
           ) : (
             <>
               <div className="analytics-grid">
-                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-                  <div style={{ color: '#6b7280', fontSize: '0.9rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Total Views</div>
-                  <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#1f2937' }}>{metrics.totalViews.toLocaleString()}</div>
+                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', transition: 'transform 0.2s ease, box-shadow 0.2s ease', cursor: 'default' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)' }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '0.5rem' }}>Total Views</div>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>{metrics.totalViews.toLocaleString()}</div>
                 </div>
-                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-                  <div style={{ color: '#6b7280', fontSize: '0.9rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Banner Clicks</div>
-                  <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#74b75c' }}>{metrics.totalClicks.toLocaleString()}</div>
+                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', transition: 'transform 0.2s ease, box-shadow 0.2s ease', cursor: 'default' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)' }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '0.5rem' }}>Banner Clicks</div>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#74b75c', letterSpacing: '-0.025em' }}>{metrics.totalClicks.toLocaleString()}</div>
                 </div>
-                <div style={{ background: '#fff', border: '2px solid rgba(116, 183, 92, 0.2)', borderRadius: '12px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 4px 12px rgba(116, 183, 92, 0.1)' }}>
-                  <div style={{ color: '#74b75c', fontSize: '0.9rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Average CTR %</div>
-                  <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#1f2937' }}>{metrics.totalCTR}%</div>
+                <div style={{ background: 'linear-gradient(to bottom right, #ffffff, #f0fdf4)', border: '2px solid rgba(116, 183, 92, 0.3)', borderRadius: '16px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 4px 12px rgba(116, 183, 92, 0.15)', transition: 'transform 0.2s ease', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                  <div style={{ color: '#15803d', fontSize: '0.875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '0.5rem' }}>Average CTR %</div>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#14532d', letterSpacing: '-0.025em' }}>{metrics.totalCTR}%</div>
                 </div>
-                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-                  <div style={{ color: '#6b7280', fontSize: '0.9rem', fontWeight: 600, textTransform: 'uppercase', marginBottom: '0.5rem' }}>Published Posts</div>
-                  <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#1f2937' }}>{metrics.publishedCount}</div>
+                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', transition: 'transform 0.2s ease, box-shadow 0.2s ease', cursor: 'default' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)' }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
+                  <div style={{ color: '#6b7280', fontSize: '0.875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '0.5rem' }}>Published Posts</div>
+                  <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>{metrics.publishedCount}</div>
                 </div>
               </div>
 
@@ -709,16 +709,16 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 {categoryChartData.length > 0 && (
                   <div>
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '0.5rem' }}>Views by Category</h3>
-                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem 1rem 1rem 1rem', height: '380px', minWidth: 0, overflow: 'hidden' }}>
+                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '2rem 1.5rem 1rem 1.5rem', height: '380px', minWidth: 0, overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)', transition: 'all 0.3s ease' }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
                             data={categoryChartData}
                             cx="50%"
                             cy="50%"
-                            innerRadius={60}
-                            outerRadius={100}
-                            paddingAngle={5}
+                            innerRadius={65}
+                            outerRadius={105}
+                            paddingAngle={6}
                             dataKey="views"
                           // Removed label to prevent overlap
                           >
@@ -727,7 +727,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                             ))}
                           </Pie>
                           <Tooltip />
-                          <Legend layout="horizontal" verticalAlign="bottom" align="center" wrapperStyle={{ paddingTop: '20px' }} />
+                          <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ paddingLeft: '20px' }} />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>
@@ -737,21 +737,37 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 {langChartData.length > 0 && (
                   <div>
                     <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '0.5rem' }}>Views by Language</h3>
-                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem 1rem 1rem 1rem', height: '380px', minWidth: 0, overflow: 'hidden' }}>
+                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '2rem 1.5rem 1rem 1.5rem', height: '380px', minWidth: 0, overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)', transition: 'all 0.3s ease' }}>
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={langChartData} margin={{ top: 20, right: 30, left: -10, bottom: 5 }}>
+                        <BarChart data={langChartData} margin={{ top: 20, right: 30, left: -10, bottom: 20 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                          <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 600 }} dy={10} />
+                          <XAxis
+                            dataKey="name"
+                            axisLine={false}
+                            tickLine={false}
+                            tick={{ fill: '#6b7280', fontSize: 11, fontWeight: 600 }}
+                            dy={15}
+                            interval={0}
+                            angle={-45}
+                            textAnchor="end"
+                            height={50}
+                          />
                           <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} allowDecimals={false} />
                           <Tooltip
-                            cursor={{ fill: 'rgba(0,0,0,0.02)' }}
-                            contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontWeight: 600 }}
+                            cursor={{ fill: 'rgba(0,0,0,0.03)' }}
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)', fontWeight: 600 }}
                           />
-                          <Bar dataKey="views" radius={[4, 4, 0, 0]} barSize={12}>
+                          <Bar dataKey="views" radius={[6, 6, 0, 0]} barSize={8}>
                             {langChartData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.views > 0 ? '#0891b2' : '#e5e7eb'} />
+                              <Cell key={`cell-${index}`} fill={entry.views > 0 ? 'url(#colorViews)' : '#e5e7eb'} />
                             ))}
                           </Bar>
+                          <defs>
+                            <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#74b75c" stopOpacity={0.9} />
+                              <stop offset="95%" stopColor="#74b75c" stopOpacity={0.7} />
+                            </linearGradient>
+                          </defs>
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
@@ -759,8 +775,8 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 )}
               </div>
 
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '1rem' }}>Campaign Performance</h3>
-              <div className="dashboard-table-container" style={{ marginBottom: '3rem' }}>
+              <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#1f2937', marginBottom: '1.25rem', letterSpacing: '-0.025em' }}>Campaign Performance</h3>
+              <div className="dashboard-table-container" style={{ marginBottom: '3rem', borderRadius: '16px', border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}>
                 <table className="dashboard-table">
                   <thead>
                     <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
@@ -794,8 +810,8 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 </table>
               </div>
 
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '1rem' }}>Top Performing Posts</h3>
-              <div className="dashboard-table-container">
+              <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#1f2937', marginBottom: '1.25rem', letterSpacing: '-0.025em' }}>Top Performing Posts</h3>
+              <div className="dashboard-table-container" style={{ borderRadius: '16px', border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}>
                 <table className="dashboard-table">
                   <thead>
                     <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
