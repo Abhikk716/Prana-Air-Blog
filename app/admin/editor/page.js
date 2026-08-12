@@ -667,63 +667,171 @@ function BlogEditorContent() {
                     'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
                     'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'codesample'
                   ],
-                  toolbar: 'undo redo | mediaslider statsblock expertinsight faqblock | blocks | ' +
+                  toolbar: 'undo redo | blocks | ' +
                     'bold italic forecolor | alignleft aligncenter ' +
                     'alignright alignjustify | bullist numlist outdent indent | ' +
-                    'image media table | removeformat | code | help',
+                    'image media table | removeformat | code | help customdesigns templates',
                   setup: (editor) => {
-                    editor.ui.registry.addButton('mediaslider', {
-                      text: 'Media Slider',
-                      tooltip: 'Insert a Gallery Box (Auto-converts to slider)',
-                      onAction: () => {
-                        editor.insertContent(`
-                          <div class="prana-gallery-box" style="border: 2px dashed #74b75c; padding: 20px; background: #f9f9f9; border-radius: 8px; margin: 2rem 0; min-height: 100px;">
-                            <p style="text-align: center; color: #74b75c; font-weight: bold; margin-bottom: 1rem;">--- Add your slider images below this line ---</p>
-                            <p><br></p>
-                          </div><p><br></p>
-                        `);
+                    editor.ui.registry.addMenuButton('customdesigns', {
+                      text: 'Custom Designs',
+                      tooltip: 'Insert predefined designs',
+                      fetch: (callback) => {
+                        const items = [
+                          {
+                            type: 'menuitem',
+                            text: 'Media Slider',
+                            onAction: () => {
+                              editor.insertContent(`
+                                <div class="prana-gallery-box" style="border: 2px dashed #74b75c; padding: 20px; background: #f9f9f9; border-radius: 8px; margin: 2rem 0; min-height: 100px;">
+                                  <p style="text-align: center; color: #74b75c; font-weight: bold; margin-bottom: 1rem;">--- Add your slider images below this line ---</p>
+                                  <p><br></p>
+                                </div><p><br></p>
+                              `);
+                            }
+                          },
+                          {
+                            type: 'menuitem',
+                            text: 'Stats Block',
+                            onAction: () => {
+                              editor.insertContent('<div class="custom-stats-block" style="background-color: #FAF6ED; border-radius: 20px; padding: 3rem 2rem; display: flex; justify-content: space-around; text-align: center; margin: 3rem 0; flex-wrap: wrap; gap: 2rem;"><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">64%</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">LOWER PM2.5</div></div><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">3.2x</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">BETTER SLEEP SCORE</div></div><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">92%</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">REPORTED FEWER HEADACHES</div></div></div><p><br></p>');
+                            }
+                          },
+                          {
+                            type: 'menuitem',
+                            text: 'FAQ Block',
+                            onAction: () => {
+                              editor.insertContent(`
+                                <div class="prana-faq-block">
+                                  <details class="prana-faq-item">
+                                    <summary>Do I need an air purifier in every room?</summary>
+                                    <div class="prana-faq-content">
+                                      <p>Start with the bedroom. It's where you spend a third of your life, and where measurable health gains compound the fastest.</p>
+                                    </div>
+                                  </details>
+                                  <details class="prana-faq-item">
+                                    <summary>What AQI is safe indoors?</summary>
+                                    <div class="prana-faq-content">
+                                      <p>Write your answer here.</p>
+                                    </div>
+                                  </details>
+                                  <details class="prana-faq-item">
+                                    <summary>Do houseplants really clean air?</summary>
+                                    <div class="prana-faq-content">
+                                      <p>Write your answer here.</p>
+                                    </div>
+                                  </details>
+                                </div><p><br></p>
+                              `);
+                            }
+                          },
+                          {
+                            type: 'menuitem',
+                            text: 'Expert Insight',
+                            onAction: () => {
+                              editor.insertContent('<div class="custom-expert-insight" style="background-color: #F1F6EC; border-radius: 20px; padding: 3rem; margin: 3rem 0;"><div style="margin-bottom: 1.5rem;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 2L11.5 8.5L18 10L11.5 11.5L10 18L8.5 11.5L2 10L8.5 8.5L10 2Z" fill="#2E5A44"/></svg></div><h3 style="font-family: \'Playfair Display\', Georgia, serif; font-size: 1.75rem; font-weight: 700; color: #111827; margin-top: 0; margin-bottom: 1.5rem;">Expert insight</h3><p style="font-size: 1.15rem; color: #4B5563; font-style: normal; margin-bottom: 2rem; line-height: 1.7;">"A purifier that runs at 35% all day will out-perform one that runs at 100% for an hour. Indoor air is a long-form problem."</p><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #6B7280; letter-spacing: 1.5px;">DR. MIRA LINDQVIST — INDOOR ENVIRONMENTS LAB, STOCKHOLM</div></div><p><br></p>');
+                            }
+                          }
+                        ];
+                        callback(items);
                       }
                     });
-                    editor.ui.registry.addButton('statsblock', {
-                      text: 'Stats Block',
-                      tooltip: 'Insert 3-column stats block',
-                      onAction: () => {
-                        editor.insertContent('<div class="custom-stats-block" style="background-color: #FAF6ED; border-radius: 20px; padding: 3rem 2rem; display: flex; justify-content: space-around; text-align: center; margin: 3rem 0; flex-wrap: wrap; gap: 2rem;"><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">64%</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">LOWER PM2.5</div></div><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">3.2x</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">BETTER SLEEP SCORE</div></div><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">92%</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">REPORTED FEWER HEADACHES</div></div></div><p><br></p>');
-                      }
-                    });
-                    editor.ui.registry.addButton('faqblock', {
-                      text: 'FAQ Block',
-                      tooltip: 'Insert a collapsible FAQ section',
-                      onAction: () => {
-                        editor.insertContent(`
-                          <div class="prana-faq-block">
-                            <details class="prana-faq-item">
-                              <summary>Do I need an air purifier in every room?</summary>
-                              <div class="prana-faq-content">
-                                <p>Start with the bedroom. It's where you spend a third of your life, and where measurable health gains compound the fastest.</p>
-                              </div>
-                            </details>
-                            <details class="prana-faq-item">
-                              <summary>What AQI is safe indoors?</summary>
-                              <div class="prana-faq-content">
-                                <p>Write your answer here.</p>
-                              </div>
-                            </details>
-                            <details class="prana-faq-item">
-                              <summary>Do houseplants really clean air?</summary>
-                              <div class="prana-faq-content">
-                                <p>Write your answer here.</p>
-                              </div>
-                            </details>
-                          </div><p><br></p>
-                        `);
-                      }
-                    });
-                    editor.ui.registry.addButton('expertinsight', {
-                      text: 'Expert Insight',
-                      tooltip: 'Insert Expert Insight block',
-                      onAction: () => {
-                        editor.insertContent('<div class="custom-expert-insight" style="background-color: #F1F6EC; border-radius: 20px; padding: 3rem; margin: 3rem 0;"><div style="margin-bottom: 1.5rem;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 2L11.5 8.5L18 10L11.5 11.5L10 18L8.5 11.5L2 10L8.5 8.5L10 2Z" fill="#2E5A44"/></svg></div><h3 style="font-family: \'Playfair Display\', Georgia, serif; font-size: 1.75rem; font-weight: 700; color: #111827; margin-top: 0; margin-bottom: 1.5rem;">Expert insight</h3><p style="font-size: 1.15rem; color: #4B5563; font-style: normal; margin-bottom: 2rem; line-height: 1.7;">"A purifier that runs at 35% all day will out-perform one that runs at 100% for an hour. Indoor air is a long-form problem."</p><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #6B7280; letter-spacing: 1.5px;">DR. MIRA LINDQVIST — INDOOR ENVIRONMENTS LAB, STOCKHOLM</div></div><p><br></p>');
+                    
+                    editor.ui.registry.addMenuButton('templates', {
+                      text: 'Templates',
+                      tooltip: 'Insert pre-designed post templates',
+                      fetch: (callback) => {
+                        const items = [
+                          {
+                            type: 'menuitem',
+                            text: 'Data / Research Report',
+                            onAction: () => {
+                              editor.insertContent(`
+                                <h1 style="text-align: center;">City Air Quality Report: [Month Year]</h1>
+                                <p style="text-align: center; font-size: 1.2rem; color: #666;">A comprehensive look at the recent trends in PM2.5 and AQI levels.</p>
+                                <p><br></p>
+                                <h2>Key Findings</h2>
+                                <div class="custom-stats-block" style="background-color: #FAF6ED; border-radius: 20px; padding: 2rem; display: flex; justify-content: space-around; text-align: center; margin: 2rem 0; flex-wrap: wrap; gap: 1rem;">
+                                  <div style="flex: 1; min-width: 150px;">
+                                    <div style="font-size: 2.5rem; font-weight: 500; color: #173828; margin-bottom: 0.5rem;">15%</div>
+                                    <div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A;">Increase in AQI</div>
+                                  </div>
+                                  <div style="flex: 1; min-width: 150px;">
+                                    <div style="font-size: 2.5rem; font-weight: 500; color: #173828; margin-bottom: 0.5rem;">45 µg/m³</div>
+                                    <div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A;">Avg PM2.5</div>
+                                  </div>
+                                </div>
+                                <h2>Detailed Analysis</h2>
+                                <p>Write your detailed analysis here, explaining the reasons behind the data changes...</p>
+                                <div style="border: 2px dashed #ccc; padding: 40px; text-align: center; background: #f9f9f9; margin: 2rem 0; border-radius: 8px;">[ Insert Data Graph / Chart Image Here ]</div>
+                                <div class="custom-expert-insight" style="background-color: #F1F6EC; border-radius: 20px; padding: 2rem; margin: 2rem 0;">
+                                  <h3 style="margin-top: 0;">Expert insight</h3>
+                                  <p>"Replace this text with a quote from an expert regarding this month's data."</p>
+                                  <div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #6B7280;">EXPERT NAME — TITLE</div>
+                                </div>
+                                <h2>Conclusion</h2>
+                                <p>Summarize the report and provide actionable advice here.</p><p><br></p>
+                              `);
+                            }
+                          },
+                          {
+                            type: 'menuitem',
+                            text: 'Educational Guide',
+                            onAction: () => {
+                              editor.insertContent(`
+                                <h1>The Complete Guide to [Topic: e.g., Indoor Air Pollutants]</h1>
+                                <p style="font-size: 1.2rem; color: #555;">Everything you need to know about [Topic] and how to protect yourself.</p>
+                                <hr style="border-top: 1px solid #eaeaea; margin: 2rem 0;" />
+                                <h2>What is [Topic]?</h2>
+                                <p>Start with a simple, clear definition here...</p>
+                                <h2>Why should you care?</h2>
+                                <p>Explain the health impacts and why this matters to the reader...</p>
+                                <div class="prana-gallery-box" style="border: 2px dashed #74b75c; padding: 20px; background: #f9f9f9; border-radius: 8px; margin: 2rem 0; text-align: center;">
+                                  <p style="color: #74b75c; font-weight: bold;">[ Insert Educational Image / Infographic Here ]</p>
+                                </div>
+                                <h2>Frequently Asked Questions</h2>
+                                <div class="prana-faq-block">
+                                  <details class="prana-faq-item"><summary>Question 1?</summary><div class="prana-faq-content"><p>Answer 1...</p></div></details>
+                                  <details class="prana-faq-item"><summary>Question 2?</summary><div class="prana-faq-content"><p>Answer 2...</p></div></details>
+                                </div>
+                                <p><br></p>
+                              `);
+                            }
+                          },
+                          {
+                            type: 'menuitem',
+                            text: 'Case Study / Success Story',
+                            onAction: () => {
+                              editor.insertContent(`
+                                <h1>How [Client Name] Transformed Their Air Quality</h1>
+                                <p style="font-size: 1.2rem; font-style: italic;">A success story about overcoming severe indoor pollution.</p>
+                                <p><br></p>
+                                <h2>The Challenge</h2>
+                                <p>[Client Name] was facing significant issues with [mention problems like high PM2.5, allergies, etc.] before they reached out to us.</p>
+                                <div style="display: flex; gap: 2rem; margin: 2rem 0; flex-wrap: wrap;">
+                                  <div style="flex: 1; background: #fff3f3; padding: 1.5rem; border-radius: 12px; border-left: 4px solid #ef4444;">
+                                    <h3 style="margin-top:0; color: #ef4444;">Before</h3>
+                                    <p style="font-size: 2rem; font-weight: bold; margin: 0;">120 AQI</p>
+                                    <p>Unhealthy indoor air</p>
+                                  </div>
+                                  <div style="flex: 1; background: #f0fdf4; padding: 1.5rem; border-radius: 12px; border-left: 4px solid #22c55e;">
+                                    <h3 style="margin-top:0; color: #22c55e;">After</h3>
+                                    <p style="font-size: 2rem; font-weight: bold; margin: 0;">25 AQI</p>
+                                    <p>Clean, healthy environment</p>
+                                  </div>
+                                </div>
+                                <h2>The Solution</h2>
+                                <p>We implemented our [Product Name] across their facility, providing real-time monitoring and advanced filtration...</p>
+                                <div style="border: 2px dashed #ccc; padding: 40px; text-align: center; background: #f9f9f9; margin: 2rem 0; border-radius: 8px;">[ Insert Image of Installed Product Here ]</div>
+                                <blockquote style="border-left: 4px solid #74b75c; padding-left: 1rem; margin: 2rem 0; font-size: 1.2rem; font-style: italic; color: #444;">
+                                  "The difference was noticeable within hours. Our employees are healthier and more productive." <br>
+                                  <span style="font-size: 0.9rem; font-weight: bold; font-style: normal; color: #888;">— [Client Name / Title]</span>
+                                </blockquote>
+                                <p><br></p>
+                              `);
+                            }
+                          }
+                        ];
+                        callback(items);
                       }
                     });
                   },
