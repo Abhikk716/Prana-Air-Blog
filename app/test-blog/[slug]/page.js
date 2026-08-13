@@ -53,25 +53,34 @@ export async function generateMetadata(props) {
 
   const pageTitle = post.seo?.title || post.title;
   const pageDescription = post.seo?.description || post.excerpt || '';
-  const postImage = post.featuredImage || '/uploads/featured/placeholder.jpg';
+  let postImage = post.featuredImage || '/uploads/featured/placeholder.jpg';
+  
+  // Remove the Vercel domain completely for SEO so it becomes a relative path
+  postImage = postImage.replace(/^https?:\/\/prana-air-blog\.vercel\.app/i, '');
+
+  const siteDomain = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pranaair.com';
+  // Ensure postImage is an absolute URL for OpenGraph/Twitter
+  const absolutePostImage = postImage.startsWith('http') ? postImage : `${siteDomain}${postImage.startsWith('/') ? '' : '/'}${postImage}`;
+  
+  const canonicalUrl = `${siteDomain}/blog/${post.slug}${lang !== 'en' ? `?lang=${lang}` : ''}`;
 
   return {
     title: `${pageTitle} | Prana Air Blog`,
     description: pageDescription.substring(0, 160),
     alternates: {
-      canonical: `http://localhost:3000/blog/${post.slug}${lang !== 'en' ? `?lang=${lang}` : ''}`, // Replace with your production domain
+      canonical: canonicalUrl,
     },
     openGraph: {
       title: post.title,
       description: pageDescription,
-      url: `http://localhost:3000/blog/${post.slug}${lang !== 'en' ? `?lang=${lang}` : ''}`,
+      url: canonicalUrl,
       type: 'article',
       publishedTime: post.publishedAt,
       modifiedTime: post.updatedAt,
       authors: [post.author || 'Admin'],
       images: [
         {
-          url: postImage,
+          url: absolutePostImage,
           alt: post.title,
         }
       ]
@@ -80,7 +89,7 @@ export async function generateMetadata(props) {
       card: 'summary_large_image',
       title: post.title,
       description: pageDescription,
-      images: [postImage],
+      images: [absolutePostImage],
     }
   };
 }
@@ -256,18 +265,15 @@ export default async function BlogPostPage(props) {
                 </div>
               )}
 
-              {/* HTML Content Body */}
               <RichContent
-                html={post.content.replace(
-                  /(?:https?:\/\/[^\/]+)?\/?wp-content\/uploads\/([^"'\s>]+)/gi,
-                  (match, filePart) => {
-                    const cleanPath = `/wp-content/uploads/${filePart}`;
-                    const bypassSecret = process.env.NEXT_PUBLIC_VERCEL_BYPASS_SECRET || process.env.VERCEL_BYPASS_SECRET || 'kvgxx9053m0tNdDFjYcNE1UCj4dpSGHd';
-                    if (!bypassSecret) return cleanPath;
-                    const separator = cleanPath.includes('?') ? '&' : '?';
-                    return `${cleanPath}${separator}x-vercel-protection-bypass=${bypassSecret}`;
-                  }
-                )}
+                html={post.content
+                  .replace(
+                    /(?:https?:\/\/[^\/]+)?\/?wp-content\/uploads\/([^"'\s>]+)/gi,
+                    (match, filePart) => {
+                      return `/wp-content/uploads/${filePart}`;
+                    }
+                  )
+                  .replace(/https?:\/\/prana-air-blog\.vercel\.app/gi, '')}
               />
 
               {bottomPromotions.length > 0 && (

@@ -16,27 +16,23 @@ export default function BlogImage({ post, className, style }) {
   const getInitialSrc = () => {
     if (!post?.featuredImage) return FALLBACK;
 
-    const img = post.featuredImage;
+    let img = post.featuredImage;
 
-    // Already an absolute URL – use as-is (covers our local /uploads CDN or any external URL)
+    // Remove the Vercel domain completely so it becomes a relative path for SEO
+    img = img.replace(/^https?:\/\/prana-air-blog\.vercel\.app/i, '');
+
+    // If it's an external URL (e.g. Unsplash), return it as is
     if (img.startsWith('http')) {
-      const bypassSecret = process.env.NEXT_PUBLIC_VERCEL_BYPASS_SECRET || 'kvgxx9053m0tNdDFjYcNE1UCj4dpSGHd';
-      if (bypassSecret && img.includes('prana-air-blog.vercel.app')) {
-        const separator = img.includes('?') ? '&' : '?';
-        return `${img}${separator}x-vercel-protection-bypass=${bypassSecret}`;
-      }
       return img;
     }
 
-    // Relative path from Blog CMS uploads – prefix the CMS origin
-    // In production replace with your deployed blog CMS domain
-    const cmsOrigin = typeof window !== 'undefined'
-      ? (process.env.NEXT_PUBLIC_BLOG_API_URL || 'https://prana-air-blog.vercel.app')
-      : (process.env.BLOG_API_URL || 'https://prana-air-blog.vercel.app');
-
-    // Strip out /test-blog/ or /blog/ prefix for the local CMS server since it serves from /
+    // Clean up the relative path
     let cleanImg = img.startsWith('/') ? img : '/' + img;
     cleanImg = cleanImg.replace(/^\/(test-blog|blog)\//, '/');
+
+    if (process.env.NODE_ENV !== 'development' && cleanImg.includes('/wp-content/uploads/')) {
+      return `https://www.pranaair.com/blog${cleanImg}`;
+    }
 
     const bypassSecret = process.env.NEXT_PUBLIC_VERCEL_BYPASS_SECRET || 'kvgxx9053m0tNdDFjYcNE1UCj4dpSGHd';
     const separator = cleanImg.includes('?') ? '&' : '?';
