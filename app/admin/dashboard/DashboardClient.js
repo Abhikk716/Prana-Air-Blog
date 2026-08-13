@@ -571,6 +571,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                     <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Author</th>
                     <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Date</th>
                     <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Status</th>
+                    <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Translations</th>
                     <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase', textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
@@ -586,6 +587,19 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                         <span style={{ padding: '0.25rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', backgroundColor: post.status === 'published' ? '#dcfce7' : '#fef3c7', color: post.status === 'published' ? '#15803d' : '#d97706' }}>
                           {post.status}
                         </span>
+                      </td>
+                      <td style={{ padding: '1.25rem 1.5rem' }}>
+                        <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                          {post.translations && Object.keys(post.translations).length > 0 ? (
+                            Object.keys(post.translations).map(lang => (
+                              <span key={lang} style={{ padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, backgroundColor: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', textTransform: 'uppercase' }}>
+                                {lang}
+                              </span>
+                            ))
+                          ) : (
+                            <span style={{ fontSize: '0.75rem', color: '#9ca3af', fontStyle: 'italic' }}>None</span>
+                          )}
+                        </div>
                       </td>
                       <td style={{ padding: '1.25rem 1.5rem', textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
