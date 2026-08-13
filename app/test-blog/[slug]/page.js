@@ -55,8 +55,14 @@ export async function generateMetadata(props) {
   const pageDescription = post.seo?.description || post.excerpt || '';
   let postImage = post.featuredImage || '/uploads/featured/placeholder.jpg';
   
-  // Remove the Vercel domain completely for SEO so it becomes a relative path
-  postImage = postImage.replace(/^https?:\/\/prana-air-blog\.vercel\.app/i, '');
+  // Remove the Vercel/Dev domain completely for SEO so it becomes a relative path
+  if (postImage.includes('wp-content/uploads/')) {
+    const match = postImage.match(/wp-content\/uploads\/.*/);
+    if (match) postImage = '/' + match[0];
+  } else {
+    postImage = postImage.replace(/(https?:\/\/)?(www\.)?prana-air-blog\.vercel\.app\/?(?:test-blog\/|blog\/)?/gi, '/');
+    postImage = postImage.replace(/(https?:\/\/)?(www\.)?dev\.pranaair\.com\/?(?:test-blog\/|blog\/)?/gi, '/');
+  }
 
   const siteDomain = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pranaair.com';
   // Ensure postImage is an absolute URL for OpenGraph/Twitter
@@ -267,13 +273,12 @@ export default async function BlogPostPage(props) {
 
               <RichContent
                 html={post.content
+                  .replace(/(https?:\/\/)?(www\.)?prana-air-blog\.vercel\.app\/?(?:test-blog\/|blog\/)?/gi, '/')
+                  .replace(/(https?:\/\/)?(www\.)?dev\.pranaair\.com\/?(?:test-blog\/|blog\/)?/gi, '/')
                   .replace(
-                    /(?:https?:\/\/[^\/]+)?\/?wp-content\/uploads\/([^"'\s>]+)/gi,
-                    (match, filePart) => {
-                      return `/wp-content/uploads/${filePart}`;
-                    }
-                  )
-                  .replace(/https?:\/\/prana-air-blog\.vercel\.app/gi, '')}
+                    /([^"'\s=]*?)\/?wp-content\/uploads\/([^"'\s>]+)/gi,
+                    '/wp-content/uploads/$2'
+                  )}
               />
 
               {bottomPromotions.length > 0 && (

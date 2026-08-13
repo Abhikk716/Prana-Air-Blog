@@ -18,8 +18,15 @@ export default function BlogImage({ post, className, style }) {
 
     let img = post.featuredImage;
 
-    // Remove the Vercel domain completely so it becomes a relative path for SEO
-    img = img.replace(/^https?:\/\/prana-air-blog\.vercel\.app/i, '');
+    // If it's a wp-content upload, strictly extract just that part
+    if (img.includes('wp-content/uploads/')) {
+      const match = img.match(/wp-content\/uploads\/.*/);
+      if (match) img = '/' + match[0];
+    } else {
+      // Remove the Vercel and dev domains completely so it becomes a relative path for SEO
+      img = img.replace(/(https?:\/\/)?(www\.)?prana-air-blog\.vercel\.app\/?(?:test-blog\/|blog\/)?/gi, '/');
+      img = img.replace(/(https?:\/\/)?(www\.)?dev\.pranaair\.com\/?(?:test-blog\/|blog\/)?/gi, '/');
+    }
 
     // If it's an external URL (e.g. Unsplash), return it as is
     if (img.startsWith('http')) {
