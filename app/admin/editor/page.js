@@ -624,7 +624,7 @@ function BlogEditorContent() {
         <div className="action-buttons">
           {postId && slug && (
             <a
-              href={`/test-blog/${slug}`}
+              href={selectedLang === 'en' ? `/test-blog/${slug}` : `/test-blog/${slug}?lang=${selectedLang}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-secondary"

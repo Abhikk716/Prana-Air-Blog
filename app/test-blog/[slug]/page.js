@@ -148,7 +148,11 @@ export default async function BlogPostPage(props) {
     }
   }
 
-  const p = JSON.parse(JSON.stringify(rawPost.toObject ? rawPost.toObject() : rawPost));
+  let pObj = rawPost.toObject ? rawPost.toObject() : rawPost;
+  if (pObj.translations instanceof Map) {
+    pObj.translations = Object.fromEntries(pObj.translations);
+  }
+  const p = JSON.parse(JSON.stringify(pObj));
   const post = translatePost(p, lang);
 
   const calculateReadingTime = (text) => {
