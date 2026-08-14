@@ -1066,6 +1066,46 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
         </div>
       )}
 
+      {/* Settings Tab */}
+      {activeTab === 'settings' && (
+        <div style={{ background: '#fff', borderRadius: '16px', padding: '2rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#1f2937', marginBottom: '1.5rem' }}>Global Settings</h2>
+          
+          <div style={{ maxWidth: '600px' }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>Anthropic (Claude) API Key</label>
+              <input
+                type="password"
+                value={settings.anthropicApiKey || ''}
+                onChange={e => setSettings({ ...settings, anthropicApiKey: e.target.value })}
+                style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '1rem' }}
+                placeholder="sk-ant-api03-..."
+              />
+              <p style={{ fontSize: '0.85rem', color: '#6b7280', marginTop: '0.5rem' }}>
+                Used for auto-translating blog posts into multiple languages.
+              </p>
+            </div>
+            
+            <button
+              onClick={handleSaveSettings}
+              disabled={savingSettings}
+              style={{
+                padding: '0.75rem 1.5rem',
+                background: '#74b75c',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                fontWeight: 600,
+                cursor: savingSettings ? 'not-allowed' : 'pointer',
+                opacity: savingSettings ? 0.7 : 1
+              }}
+            >
+              {savingSettings ? 'Saving...' : 'Save Settings'}
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
