@@ -13,7 +13,7 @@ export async function POST(req) {
 
     await connectDB();
     const settings = await Settings.findOne({});
-    const apiKey = settings?.claudeApiKey || process.env.CLAUDE_API_KEY;
+    const apiKey = settings?.anthropicApiKey || process.env.CLAUDE_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json({ success: false, error: 'Anthropic API Key is missing. Please add it in settings.' }, { status: 400 });
