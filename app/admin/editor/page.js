@@ -6,6 +6,23 @@ import Script from 'next/script';
 import { Editor } from '@tinymce/tinymce-react';
 import './editor.css';
 
+const allLanguages = [
+  { code: 'en', label: 'Global English (EN)', group: 'English Variants' },
+  { code: 'in', label: 'English - India (EN-IN)', group: 'English Variants' },
+  { code: 'us', label: 'English - USA (EN-US)', group: 'English Variants' },
+  { code: 'en-GB', label: 'English - UK (EN-GB)', group: 'English Variants' },
+  { code: 'en-CA', label: 'English - Canada (EN-CA)', group: 'English Variants' },
+  { code: 'en-AU', label: 'English - Australia (EN-AU)', group: 'English Variants' },
+  { code: 'sg', label: 'English - Singapore (EN-SG)', group: 'English Variants' },
+  { code: 'hi', label: 'Hindi (HI)', group: 'Translations' },
+  { code: 'es', label: 'Spanish (ES)', group: 'Translations' },
+  { code: 'de', label: 'German (DE)', group: 'Translations' },
+  { code: 'fr', label: 'French (FR)', group: 'Translations' },
+  { code: 'ru', label: 'Russian (RU)', group: 'Translations' },
+  { code: 'ja', label: 'Japanese (JA)', group: 'Translations' },
+  { code: 'pt', label: 'Portuguese (PT)', group: 'Translations' }
+];
+
 function BlogEditorContent() {
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
@@ -13,6 +30,7 @@ function BlogEditorContent() {
   const [content, setContent] = useState('');
   const [excerpt, setExcerpt] = useState('');
   const [featuredImage, setFeaturedImage] = useState('');
+  const [featuredImageAlt, setFeaturedImageAlt] = useState('');
   const [status, setStatus] = useState('draft');
   const [author, setAuthor] = useState('Admin');
 
@@ -50,7 +68,14 @@ function BlogEditorContent() {
     de: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
     fr: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
     ru: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
-    ja: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' }
+    ja: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+    pt: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+    in: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+    us: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+    'en-GB': { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+    'en-CA': { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+    'en-AU': { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+    sg: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' }
   });
 
   const onTitleChange = (val) => {
@@ -95,27 +120,45 @@ function BlogEditorContent() {
 
   const handleLangChange = (newLang) => {
     // 1. Sync current state back to editorData to ensure it is up to date
-    setEditorData(prev => ({
-      ...prev,
-      [selectedLang]: {
-        title,
-        content,
-        excerpt,
-        seoTitle,
-        seoDescription
-      }
-    }));
+    const currentLangData = {
+      title,
+      content,
+      excerpt,
+      seoTitle,
+      seoDescription
+    };
+
+    const newEditorData = {
+      ...editorData,
+      [selectedLang]: currentLangData
+    };
 
     // 2. Load values for new language
-    const data = editorData[newLang] || { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' };
+    let data = newEditorData[newLang] || { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' };
+
+    // If switching to an English variant and it's empty, pre-fill with Global English
+    const englishVariants = ['in', 'us', 'en-GB', 'en-CA', 'en-AU', 'sg'];
+    if (englishVariants.includes(newLang)) {
+      const enData = newEditorData.en;
+      if (!data.title && !data.content) {
+        data = {
+          title: enData.title,
+          content: enData.content,
+          excerpt: enData.excerpt,
+          seoTitle: enData.seoTitle,
+          seoDescription: enData.seoDescription
+        };
+        newEditorData[newLang] = data; // Keep the pre-filled data in the state
+      }
+    }
+
+    setEditorData(newEditorData);
+
     setTitle(data.title);
     setContent(data.content);
     setExcerpt(data.excerpt);
     setSeoTitle(data.seoTitle);
     setSeoDescription(data.seoDescription);
-
-    // Update TinyMCE
-    setContent(data.content);
 
     setSelectedLang(newLang);
   };
@@ -130,6 +173,71 @@ function BlogEditorContent() {
   const postId = searchParams.get('id'); // Get the post ID if we are editing
 
   const editorRef = useRef(null);
+
+  const [showTranslateModal, setShowTranslateModal] = useState(false);
+  const [showLangSelectModal, setShowLangSelectModal] = useState(false);
+  const [translating, setTranslating] = useState(false);
+  const [translateLangs, setTranslateLangs] = useState({
+    hi: true, es: true, de: true, fr: true, ru: true, ja: true, pt: true
+  });
+
+  const handleTranslateAll = async () => {
+    const targetLanguages = Object.keys(translateLangs).filter(l => translateLangs[l]);
+    if (targetLanguages.length === 0) {
+      showNotification('Please select at least one language.', 'error');
+      return;
+    }
+
+    const enData = editorData.en;
+    const currentTitle = selectedLang === 'en' ? title : enData.title;
+    const currentExcerpt = selectedLang === 'en' ? excerpt : enData.excerpt;
+    const currentContent = selectedLang === 'en' ? content : enData.content;
+
+    if (!currentTitle) {
+      showNotification('Please provide an English title before translating.', 'error');
+      return;
+    }
+
+    setTranslating(true);
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: currentTitle,
+          excerpt: currentExcerpt,
+          content: currentContent,
+          targetLanguages
+        })
+      });
+      const data = await res.json();
+      if (data.success && data.translations) {
+        setEditorData(prev => {
+          const newData = { ...prev };
+          Object.entries(data.translations).forEach(([lang, translated]) => {
+            if (newData[lang]) {
+              newData[lang] = {
+                ...newData[lang],
+                title: translated.title || '',
+                excerpt: translated.excerpt || '',
+                content: translated.content || ''
+              };
+            }
+          });
+          return newData;
+        });
+        showNotification('Translation completed successfully!', 'success');
+        setShowTranslateModal(false);
+      } else {
+        showNotification(data.error || 'Translation failed', 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification('Network error during translation', 'error');
+    } finally {
+      setTranslating(false);
+    }
+  };
 
   // 1. Authenticate check on Client Component
   useEffect(() => {
@@ -183,12 +291,13 @@ function BlogEditorContent() {
             de: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
             fr: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
             ru: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
-            ja: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' }
+            ja: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+            pt: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' }
           };
 
           if (post.translations) {
             const postTranslations = post.translations;
-            for (const lang of ['hi', 'es', 'de', 'fr', 'ru', 'ja']) {
+            for (const lang of ['hi', 'es', 'de', 'fr', 'ru', 'ja', 'pt']) {
               if (postTranslations[lang]) {
                 const t = postTranslations[lang];
                 loadedData[lang] = {
@@ -213,6 +322,7 @@ function BlogEditorContent() {
 
           setSlug(post.slug || '');
           setFeaturedImage(post.featuredImage || '');
+          setFeaturedImageAlt(post.featuredImageAlt || '');
           setStatus(post.status || 'draft');
           setAuthor(post.author || 'Admin');
           setCategories(post.categories || []);
@@ -398,7 +508,7 @@ function BlogEditorContent() {
 
     // Build translations payload
     const payloadTranslations = {};
-    for (const lang of ['hi', 'es', 'de', 'fr', 'ru', 'ja']) {
+    for (const lang of ['hi', 'es', 'de', 'fr', 'ru', 'ja', 'pt']) {
       const t = updatedEditorData[lang];
       if (t.title.trim() || t.content.trim()) {
         payloadTranslations[lang] = {
@@ -420,6 +530,7 @@ function BlogEditorContent() {
       content: enData.content,
       excerpt: enData.excerpt || enData.title,
       featuredImage,
+      featuredImageAlt,
       status: postStatus,
       author,
       categories,
@@ -458,17 +569,9 @@ function BlogEditorContent() {
         setStatus(postStatus);
         showNotification(`Post successfully saved as ${postStatus}!`);
 
-        if (postStatus === 'published') {
-          // Wait and redirect to dashboard
-          setTimeout(() => {
-            router.push('/admin/dashboard');
-            router.refresh();
-          }, 1000);
-        } else {
-          // If saved as draft and it's a new post, update URL so we get the ID for further saves and Preview button
-          if (!postId && result.data && result.data._id) {
-            router.push(`/admin/editor?id=${result.data._id}`);
-          }
+        // If it's a new post, update URL so we get the ID for further saves and Preview button
+        if (!postId && result.data && result.data._id) {
+          router.push(`/admin/editor?id=${result.data._id}`);
         }
       } else {
         showNotification(result.error || 'Failed to save post.', 'error');
@@ -543,67 +646,52 @@ function BlogEditorContent() {
         {/* Main Work Area */}
         <div className="main-editor-pane">
           {/* Translation Tab Bar */}
-          <div className="language-selector-tabs" style={{
-            display: 'flex',
-            gap: '0.35rem',
-            marginBottom: '1.75rem',
-            borderBottom: '2px solid #fbfbfbff',
-            paddingBottom: '0.75rem',
-            flexWrap: 'wrap'
-          }}>
-            {[
-              { code: 'en', label: 'English (EN)' },
-              { code: 'hi', label: 'Hindi (HI)' },
-              { code: 'es', label: 'Spanish (ES)' },
-              { code: 'de', label: 'German (DE)' },
-              { code: 'fr', label: 'French (FR)' },
-              { code: 'ru', label: 'Russian (RU)' },
-              { code: 'ja', label: 'Japanese (JA)' }
-            ].map(lang => {
-              const isActive = selectedLang === lang.code;
-              const hasContent = lang.code === 'en'
-                ? title.trim() !== ''
-                : (editorData[lang.code]?.title?.trim() || '') !== '';
-              return (
-                <button
-                  key={lang.code}
-                  type="button"
-                  onClick={() => handleLangChange(lang.code)}
-                  style={{
-                    padding: '0.5rem 0.85rem',
-                    borderRadius: '8px',
-                    border: 'none',
-                    backgroundColor: isActive ? '#dcfce7' : 'transparent',
-                    color: isActive ? '#15803d' : '#64748b',
-                    fontWeight: isActive ? 700 : 500,
-                    cursor: 'pointer',
-                    fontSize: '0.85rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.35rem',
-                    transition: 'all 0.2s',
-                    outline: 'none'
-                  }}
-                  onMouseOver={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = '#f1f5f9';
-                  }}
-                  onMouseOut={(e) => {
-                    if (!isActive) e.currentTarget.style.backgroundColor = 'transparent';
-                  }}
-                >
-                  {lang.label}
-                  {hasContent && (
-                    <span style={{
-                      width: '6px',
-                      height: '6px',
-                      borderRadius: '50%',
-                      backgroundColor: '#22c55e',
-                      display: 'inline-block'
-                    }} />
-                  )}
-                </button>
-              );
-            })}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem', borderBottom: '2px solid #fbfbfbff', paddingBottom: '0.75rem' }}>
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowLangSelectModal(true)}
+                style={{
+                  padding: '0.6rem 1.25rem',
+                  borderRadius: '8px',
+                  border: '1px solid #e5e7eb',
+                  backgroundColor: '#fff',
+                  color: '#1f2937',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                }}
+              >
+                Editing Language: {allLanguages.find(l => l.code === selectedLang)?.label || 'Global English (EN)'}
+                <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>▼</span>
+              </button>
+            </div>
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowTranslateModal(true)}
+                style={{
+                  backgroundColor: '#63a44d',
+                  color: 'white',
+                  border: 'none',
+                  padding: '0.6rem 1.25rem',
+                  borderRadius: '8px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  fontSize: '0.9rem',
+                }}
+              >
+                Auto Translate
+              </button>
+            </div>
           </div>
 
           <div className="form-group">
@@ -662,6 +750,8 @@ function BlogEditorContent() {
                   branding: false,
                   promotion: false,
                   menubar: true,
+                  image_title: true,
+                  image_advtab: true,
                   plugins: [
                     'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
                     'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
@@ -735,7 +825,7 @@ function BlogEditorContent() {
                         callback(items);
                       }
                     });
-                    
+
                     editor.ui.registry.addMenuButton('templates', {
                       text: 'Templates',
                       tooltip: 'Insert pre-designed post templates',
@@ -919,6 +1009,16 @@ function BlogEditorContent() {
                     Upload
                   </button>
                 </div>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                  <input
+                    type="text"
+                    className="input-text"
+                    style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', flexGrow: 1 }}
+                    placeholder="Image Alt Text (SEO)..."
+                    value={featuredImageAlt}
+                    onChange={(e) => setFeaturedImageAlt(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -929,8 +1029,8 @@ function BlogEditorContent() {
             <div className="form-group" style={{ marginBottom: '1rem' }}>
               <label className="form-label">Categories</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                <select 
-                  className="input-text" 
+                <select
+                  className="input-text"
                   style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', cursor: 'pointer' }}
                   onChange={(e) => {
                     if (e.target.value && !categories.includes(e.target.value)) {
@@ -1066,6 +1166,133 @@ function BlogEditorContent() {
           </div>
         </div>
       </div>
+
+      {showTranslateModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999,
+          display: 'flex', justifyContent: 'center', alignItems: 'center'
+        }}>
+          <div style={{
+            background: 'white', padding: '2rem', borderRadius: '12px',
+            width: '90%', maxWidth: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+          }}>
+            <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#1f2937' }}>Auto-Translate Post</h3>
+            <p style={{ fontSize: '0.9rem', color: '#4b5563', marginBottom: '1.5rem' }}>Select the languages you want to translate the English content to.</p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              {Object.entries({ hi: 'Hindi', es: 'Spanish', de: 'German', fr: 'French', ru: 'Russian', ja: 'Japanese', pt: 'Portuguese' }).map(([code, name]) => (
+                <label key={code} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={translateLangs[code]}
+                    onChange={e => setTranslateLangs({ ...translateLangs, [code]: e.target.checked })}
+                    style={{ width: '1.1rem', height: '1.1rem' }}
+                  />
+                  <span style={{ fontSize: '0.9rem', color: '#374151', fontWeight: 500 }}>{name}</span>
+                </label>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+              <button
+                onClick={() => setShowTranslateModal(false)}
+                style={{ padding: '0.5rem 1rem', background: '#f3f4f6', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', color: '#4b5563' }}
+                disabled={translating}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTranslateAll}
+                disabled={translating}
+                style={{ padding: '0.5rem 1rem', background: '#4f46e5', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', color: 'white', opacity: translating ? 0.7 : 1 }}
+              >
+                {translating ? 'Translating...' : 'Translate'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Language Select Modal */}
+      {showLangSelectModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000,
+          display: 'flex', justifyContent: 'center', alignItems: 'center'
+        }}>
+          <div style={{
+            background: 'white', padding: '2rem', borderRadius: '12px',
+            width: '90%', maxWidth: '600px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
+            maxHeight: '90vh', overflowY: 'auto'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0, color: '#1f2937' }}>Select Language to Edit</h3>
+              <button
+                onClick={() => setShowLangSelectModal(false)}
+                style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#6b7280' }}
+              >
+                &times;
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '2rem' }}>
+              <h4 style={{ color: '#4b5563', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.5rem', marginBottom: '1rem' }}>English Variants (Original Content)</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                {allLanguages.filter(l => l.group === 'English Variants').map(lang => {
+                  const isActive = selectedLang === lang.code;
+                  const hasContent = lang.code === 'en' ? title.trim() !== '' : (editorData[lang.code]?.title?.trim() || '') !== '';
+                  return (
+                    <button
+                      key={lang.code}
+                      onClick={() => {
+                        handleLangChange(lang.code);
+                        setShowLangSelectModal(false);
+                      }}
+                      style={{
+                        padding: '0.75rem', borderRadius: '8px', border: isActive ? '2px solid #10b981' : '1px solid #e5e7eb',
+                        backgroundColor: isActive ? '#f0fdf4' : 'white', color: '#374151', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left', fontWeight: 500
+                      }}
+                    >
+                      <span>{lang.label}</span>
+                      {hasContent && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} title="Has Content" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <h4 style={{ color: '#4b5563', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Translations</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                {allLanguages.filter(l => l.group === 'Translations').map(lang => {
+                  const isActive = selectedLang === lang.code;
+                  const hasContent = (editorData[lang.code]?.title?.trim() || '') !== '';
+                  return (
+                    <button
+                      key={lang.code}
+                      onClick={() => {
+                        handleLangChange(lang.code);
+                        setShowLangSelectModal(false);
+                      }}
+                      style={{
+                        padding: '0.75rem', borderRadius: '8px', border: isActive ? '2px solid #10b981' : '1px solid #e5e7eb',
+                        backgroundColor: isActive ? '#f0fdf4' : 'white', color: '#374151', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left', fontWeight: 500
+                      }}
+                    >
+                      <span>{lang.label}</span>
+                      {hasContent && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} title="Has Content" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

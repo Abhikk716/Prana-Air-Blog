@@ -26,6 +26,11 @@ const PostSchema = new mongoose.Schema(
       type: String, // URL to local upload or S3
       default: '',
     },
+    featuredImageAlt: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     author: {
       type: String,
       default: 'Admin',

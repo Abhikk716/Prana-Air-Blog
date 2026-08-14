@@ -38,10 +38,52 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   });
 
   const [activeBannerTab, setActiveBannerTab] = useState('global');
+  
+  const [settings, setSettings] = useState({ anthropicApiKey: '' });
+  const [loadingSettings, setLoadingSettings] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
     fetchBanners();
+    fetchSettings();
   }, []);
+
+  const fetchSettings = async () => {
+    setLoadingSettings(true);
+    try {
+      const res = await fetch('/api/settings');
+      const data = await res.json();
+      if (data.success && data.data) {
+        setSettings(data.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingSettings(false);
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('Settings saved successfully');
+      } else {
+        alert(data.error || 'Failed to save settings');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   const fetchBanners = async () => {
     setLoadingBanners(true);
@@ -1023,6 +1065,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
           </div>
         </div>
       )}
+
     </div>
   );
 }
