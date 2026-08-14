@@ -11,9 +11,12 @@ export async function POST(req) {
       return NextResponse.json({ success: false, error: 'No target languages provided' }, { status: 400 });
     }
 
-    const apiKey = process.env.CLAUDE_API_KEY;
+    await connectDB();
+    const settings = await Settings.findOne({});
+    const apiKey = settings?.claudeApiKey || process.env.CLAUDE_API_KEY;
+
     if (!apiKey) {
-      return NextResponse.json({ success: false, error: 'Anthropic API Key is missing in server configuration.' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Anthropic API Key is missing. Please add it in settings.' }, { status: 400 });
     }
 
     const anthropic = new Anthropic({
