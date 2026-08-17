@@ -770,20 +770,33 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                         <PieChart>
                           <Pie
                             data={categoryChartData}
-                            cx="50%"
+                            cx="40%"
                             cy="50%"
-                            innerRadius={65}
-                            outerRadius={105}
-                            paddingAngle={6}
+                            innerRadius={75}
+                            outerRadius={110}
+                            paddingAngle={2}
+                            minAngle={5}
                             dataKey="views"
-                          // Removed label to prevent overlap
                           >
                             {categoryChartData.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip />
-                          <Legend layout="vertical" verticalAlign="middle" align="right" wrapperStyle={{ paddingLeft: '20px' }} />
+                          <Tooltip 
+                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
+                          />
+                          <Legend 
+                            layout="vertical" 
+                            verticalAlign="middle" 
+                            align="right" 
+                            wrapperStyle={{ 
+                              paddingLeft: '10px',
+                              maxHeight: '320px',
+                              overflowY: 'auto',
+                              width: '45%',
+                              fontSize: '12px'
+                            }} 
+                          />
                         </PieChart>
                       </ResponsiveContainer>
                     </div>

@@ -2,9 +2,43 @@ import { NextResponse } from 'next/server';
 import connectDB from '../../../../lib/db';
 import Post from '../../../../models/post';
 
+const rateLimitCache = new Map();
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
 export async function POST(request) {
   try {
     const { slug, action, lang } = await request.json();
+    
+    // Get client IP
+    const ip = request.headers.get('x-forwarded-for') || request.ip || 'unknown-ip';
+    const cacheKey = `${ip}_${slug}_${action}`;
+    
+    // Simple Rate Limiting: Prevent duplicate action from same IP within the window
+    if (action === 'view') {
+      const lastRequestTime = rateLimitCache.get(cacheKey);
+      const now = Date.now();
+      if (lastRequestTime && (now - lastRequestTime < RATE_LIMIT_WINDOW_MS)) {
+        // Ignored to prevent spam, return success anyway to client
+        return NextResponse.json({ success: true, ignored: true }, {
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type'
+          }
+        });
+      }
+      // Update cache
+      rateLimitCache.set(cacheKey, now);
+      
+      // Cleanup old cache entries occasionally to prevent memory leak
+      if (rateLimitCache.size > 10000) {
+        for (const [key, timestamp] of rateLimitCache.entries()) {
+          if (now - timestamp > RATE_LIMIT_WINDOW_MS) {
+            rateLimitCache.delete(key);
+          }
+        }
+      }
+    }
 
     if (!slug || !action) {
       return NextResponse.json({ success: false, error: 'Missing slug or action' }, { status: 400 });
