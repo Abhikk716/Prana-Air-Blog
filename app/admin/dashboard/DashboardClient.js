@@ -275,7 +275,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
     const matchesCategory =
       categoryFilter === 'all' ||
       (post.categories && post.categories.includes(categoryFilter));
-      
+
     let matchesDate = true;
     if (dateFilter) {
       const postDate = new Date(post.publishedAt || post.createdAt).toISOString().split('T')[0];
@@ -513,34 +513,14 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
           <div className="dashboard-filters">
             <input
               type="text"
+              className="dashboard-search-input"
               placeholder="Search by title or author..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              style={{
-                flexGrow: 1,
-                maxWidth: '400px',
-                padding: '0.75rem 1rem',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                color: '#1f2937',
-                fontSize: '0.9rem',
-                outline: 'none',
-              }}
             />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              style={{
-                padding: '0.75rem 1rem',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                color: '#1f2937',
-                fontSize: '0.9rem',
-                outline: 'none',
-                cursor: 'pointer',
-              }}
             >
               <option value="all">All Statuses</option>
               <option value="published">Published</option>
@@ -550,16 +530,6 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              style={{
-                padding: '0.75rem 1rem',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                color: '#1f2937',
-                fontSize: '0.9rem',
-                outline: 'none',
-                cursor: 'pointer',
-              }}
             >
               <option value="all">All Categories</option>
               {categories.map((cat, i) => (
@@ -570,16 +540,6 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
             <select
               value={languageFilter}
               onChange={(e) => setLanguageFilter(e.target.value)}
-              style={{
-                padding: '0.75rem 1rem',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                color: '#1f2937',
-                fontSize: '0.9rem',
-                outline: 'none',
-                cursor: 'pointer',
-              }}
             >
               <option value="all">All Languages</option>
               {['en', 'in', 'us', 'en-GB', 'en-CA', 'en-AU', 'sg', 'hi', 'fr', 'de', 'es', 'ru', 'ja', 'pt-PT'].map(lang => (
@@ -594,67 +554,48 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
               onBlur={(e) => { if (!dateFilter) e.target.type = "text"; }}
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              style={{
-                padding: '0.75rem 1rem',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                color: '#1f2937',
-                fontSize: '0.9rem',
-                outline: 'none',
-              }}
             />
 
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              style={{
-                padding: '0.75rem 1rem',
-                backgroundColor: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '8px',
-                color: '#1f2937',
-                fontSize: '0.9rem',
-                outline: 'none',
-                cursor: 'pointer',
-              }}
             >
               <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>
             </select>
           </div>
 
-          <div className="dashboard-table-container" style={{ borderRadius: '16px', border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}>
+          <div className="dashboard-table-container">
             {filteredPosts.length > 0 ? (
               <table className="dashboard-table">
                 <thead>
-                  <tr style={{ borderBottom: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
-                    <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Title</th>
-                    <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Author</th>
-                    <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Date</th>
-                    <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Status</th>
-                    <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase' }}>Translations</th>
-                    <th style={{ padding: '1rem 1.5rem', fontSize: '0.85rem', color: '#6b7280', fontWeight: 700, textTransform: 'uppercase', textAlign: 'right' }}>Actions</th>
+                  <tr>
+                    <th>Title</th>
+                    <th>Author</th>
+                    <th>Date</th>
+                    <th>Status</th>
+                    <th>Translations</th>
+                    <th className="align-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredPosts.map((post) => (
-                    <tr key={post._id} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                      <td style={{ padding: '1.25rem 1.5rem', fontWeight: 600 }}>
+                    <tr key={post._id}>
+                      <td style={{ fontWeight: 600, color: '#1f2937' }}>
                         <a href={`/blog/${post.slug}`} target="_blank" style={{ color: '#1f2937', textDecoration: 'none' }}>{post.title}</a>
                       </td>
-                      <td style={{ padding: '1.25rem 1.5rem', color: '#4b5563' }}>{post.author || 'Admin'}</td>
-                      <td style={{ padding: '1.25rem 1.5rem', color: '#6b7280', fontSize: '0.85rem' }}>{formatDate(post.publishedAt || post.createdAt)}</td>
-                      <td style={{ padding: '1.25rem 1.5rem' }}>
-                        <span style={{ padding: '0.25rem 0.6rem', borderRadius: '4px', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', backgroundColor: post.status === 'published' ? '#dcfce7' : '#fef3c7', color: post.status === 'published' ? '#15803d' : '#d97706' }}>
+                      <td>{post.author || 'Admin'}</td>
+                      <td style={{ fontSize: '0.85rem' }}>{formatDate(post.publishedAt || post.createdAt)}</td>
+                      <td>
+                        <span className={`badge-status ${post.status}`}>
                           {post.status}
                         </span>
                       </td>
-                      <td style={{ padding: '1.25rem 1.5rem' }}>
+                      <td>
                         <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
                           {post.translations && Object.keys(post.translations).length > 0 ? (
                             Object.keys(post.translations).map(lang => (
-                              <span key={lang} style={{ padding: '0.15rem 0.4rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 600, backgroundColor: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', textTransform: 'uppercase' }}>
+                              <span key={lang} className="badge-lang">
                                 {lang}
                               </span>
                             ))
@@ -663,7 +604,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                           )}
                         </div>
                       </td>
-                      <td style={{ padding: '1.25rem 1.5rem', textAlign: 'right' }}>
+                      <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
                           <a href={`/admin/editor?id=${post._id}`} style={{ fontSize: '0.85rem', fontWeight: 600, color: '#2563eb' }}>Edit</a>
                           <button onClick={() => handleDelete(post._id, post.title)} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>Delete</button>
@@ -685,13 +626,12 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
       {activeTab === 'analytics' && (
         <div style={{ padding: '1rem 0' }}>
 
-          <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Time Range</label>
+          <div className="analytics-filters">
+            <div className="analytics-filter-group">
+              <label>Time Range</label>
               <select
                 value={analyticsTimeFilter}
                 onChange={(e) => setAnalyticsTimeFilter(e.target.value)}
-                style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid #e5e7eb', outline: 'none' }}
               >
                 <option value="all">All Time</option>
                 <option value="7d">Last 7 Days</option>
@@ -702,34 +642,31 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
             </div>
 
             {analyticsTimeFilter === 'custom' && (
-              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Start</label>
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <div className="analytics-filter-group">
+                  <label>Start</label>
                   <input
                     type="date"
                     value={customStartDate}
                     onChange={(e) => setCustomStartDate(e.target.value)}
-                    style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #e5e7eb', outline: 'none' }}
                   />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>End</label>
+                <div className="analytics-filter-group">
+                  <label>End</label>
                   <input
                     type="date"
                     value={customEndDate}
                     onChange={(e) => setCustomEndDate(e.target.value)}
-                    style={{ padding: '0.5rem 1rem', borderRadius: '8px', border: '1px solid #e5e7eb', outline: 'none' }}
                   />
                 </div>
               </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' }}>Category</label>
+            <div className="analytics-filter-group">
+              <label>Category</label>
               <select
                 value={analyticsCategoryFilter}
                 onChange={(e) => setAnalyticsCategoryFilter(e.target.value)}
-                style={{ padding: '0.6rem 1rem', borderRadius: '8px', border: '1px solid #e5e7eb', outline: 'none' }}
               >
                 <option value="all">All Categories</option>
                 {categories.map((cat, i) => (
@@ -744,28 +681,28 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
           ) : (
             <>
               <div className="analytics-grid">
-                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', transition: 'transform 0.2s ease, box-shadow 0.2s ease', cursor: 'default' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)' }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
-                  <div style={{ color: '#6b7280', fontSize: '0.875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '0.5rem' }}>Total Views</div>
-                  <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>{metrics.totalViews.toLocaleString()}</div>
+                <div className="stat-card">
+                  <div className="stat-label">Total Views</div>
+                  <div className="stat-value">{metrics.totalViews.toLocaleString()}</div>
                 </div>
-                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', transition: 'transform 0.2s ease, box-shadow 0.2s ease', cursor: 'default' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)' }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
-                  <div style={{ color: '#6b7280', fontSize: '0.875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '0.5rem' }}>Banner Clicks</div>
-                  <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#74b75c', letterSpacing: '-0.025em' }}>{metrics.totalClicks.toLocaleString()}</div>
+                <div className="stat-card">
+                  <div className="stat-label">Banner Clicks</div>
+                  <div className="stat-value" style={{ color: '#74b75c' }}>{metrics.totalClicks.toLocaleString()}</div>
                 </div>
-                <div style={{ background: 'linear-gradient(to bottom right, #ffffff, #f0fdf4)', border: '2px solid rgba(116, 183, 92, 0.3)', borderRadius: '16px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 4px 12px rgba(116, 183, 92, 0.15)', transition: 'transform 0.2s ease', cursor: 'default' }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-                  <div style={{ color: '#15803d', fontSize: '0.875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '0.5rem' }}>Average CTR %</div>
-                  <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#14532d', letterSpacing: '-0.025em' }}>{metrics.totalCTR}%</div>
+                <div className="stat-card stat-highlight">
+                  <div className="stat-label">Average CTR %</div>
+                  <div className="stat-value">{metrics.totalCTR}%</div>
                 </div>
-                <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '1.5rem', textAlign: 'center', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)', transition: 'transform 0.2s ease, box-shadow 0.2s ease', cursor: 'default' }} onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)' }} onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)' }}>
-                  <div style={{ color: '#6b7280', fontSize: '0.875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.025em', marginBottom: '0.5rem' }}>Published Posts</div>
-                  <div style={{ fontSize: '2.5rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em' }}>{metrics.publishedCount}</div>
+                <div className="stat-card">
+                  <div className="stat-label">Published Posts</div>
+                  <div className="stat-value">{metrics.publishedCount}</div>
                 </div>
               </div>
 
               {analyticsTimeFilter !== 'all' && timeChartData.length > 0 && (
                 <div style={{ marginBottom: '3rem', marginTop: '3rem' }}>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '0.5rem' }}>Views Over Time</h3>
-                  <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem 1rem 1rem 1rem', height: '380px', minWidth: 0, overflow: 'hidden' }}>
+                  <h3 className="section-title">Views Over Time</h3>
+                  <div className="chart-card">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={timeChartData} margin={{ top: 20, right: 30, left: -10, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
@@ -784,8 +721,8 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
               <div className="charts-grid">
                 {categoryChartData.length > 0 && (
                   <div>
-                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '0.5rem' }}>Views by Category</h3>
-                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '2rem 1.5rem 1rem 1.5rem', height: '380px', minWidth: 0, overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)', transition: 'all 0.3s ease' }}>
+                    <h3 className="section-title">Views by Category</h3>
+                    <div className="chart-card">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                           <Pie
@@ -802,20 +739,20 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
-                          <Tooltip 
+                          <Tooltip
                             contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
                           />
-                          <Legend 
-                            layout="vertical" 
-                            verticalAlign="middle" 
-                            align="right" 
-                            wrapperStyle={{ 
+                          <Legend
+                            layout="vertical"
+                            verticalAlign="middle"
+                            align="right"
+                            wrapperStyle={{
                               paddingLeft: '10px',
                               maxHeight: '320px',
                               overflowY: 'auto',
                               width: '45%',
                               fontSize: '12px'
-                            }} 
+                            }}
                           />
                         </PieChart>
                       </ResponsiveContainer>
@@ -825,8 +762,8 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
 
                 {langChartData.length > 0 && (
                   <div>
-                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '0.5rem' }}>Views by Language</h3>
-                    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '16px', padding: '2rem 1.5rem 1rem 1.5rem', height: '380px', minWidth: 0, overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025)', transition: 'all 0.3s ease' }}>
+                    <h3 className="section-title">Views by Language</h3>
+                    <div className="chart-card">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={langChartData} margin={{ top: 20, right: 30, left: -10, bottom: 20 }}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
@@ -864,15 +801,15 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 )}
               </div>
 
-              <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#1f2937', marginBottom: '1.25rem', letterSpacing: '-0.025em' }}>Campaign Performance</h3>
-              <div className="dashboard-table-container" style={{ marginBottom: '3rem', borderRadius: '16px', border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}>
+              <h3 className="section-title-lg">Campaign Performance</h3>
+              <div className="dashboard-table-container" style={{ marginBottom: '3rem' }}>
                 <table className="dashboard-table">
                   <thead>
-                    <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                      <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Campaign Name</th>
-                      <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Total Views</th>
-                      <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Banner Clicks</th>
-                      <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>CTR</th>
+                    <tr>
+                      <th>Campaign Name</th>
+                      <th>Total Views</th>
+                      <th>Banner Clicks</th>
+                      <th>CTR</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -881,11 +818,11 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                       const isHighCTR = parseFloat(ctr) > 5.0;
 
                       return (
-                        <tr key={i} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                          <td style={{ padding: '1rem', fontWeight: 600, color: '#1f2937' }}>{campaign.name}</td>
-                          <td style={{ padding: '1rem', color: '#4b5563', fontWeight: 500 }}>{campaign.views.toLocaleString()}</td>
-                          <td style={{ padding: '1rem', color: '#4b5563', fontWeight: 500 }}>{campaign.clicks.toLocaleString()}</td>
-                          <td style={{ padding: '1rem', color: isHighCTR ? '#15803d' : '#4b5563', fontWeight: isHighCTR ? 700 : 500, backgroundColor: isHighCTR ? 'rgba(34, 197, 94, 0.1)' : 'transparent' }}>
+                        <tr key={i}>
+                          <td style={{ fontWeight: 600, color: '#1f2937' }}>{campaign.name}</td>
+                          <td>{campaign.views.toLocaleString()}</td>
+                          <td>{campaign.clicks.toLocaleString()}</td>
+                          <td style={{ color: isHighCTR ? '#15803d' : '#4b5563', fontWeight: isHighCTR ? 700 : 500, backgroundColor: isHighCTR ? 'rgba(34, 197, 94, 0.1)' : 'transparent' }}>
                             {ctr}%
                           </td>
                         </tr>
@@ -899,15 +836,15 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 </table>
               </div>
 
-              <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#1f2937', marginBottom: '1.25rem', letterSpacing: '-0.025em' }}>Top Performing Posts</h3>
-              <div className="dashboard-table-container" style={{ borderRadius: '16px', border: '1px solid #e5e7eb', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' }}>
+              <h3 className="section-title-lg">Top Performing Posts</h3>
+              <div className="dashboard-table-container">
                 <table className="dashboard-table">
                   <thead>
-                    <tr style={{ backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                      <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Post Title</th>
-                      <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Total Views</th>
-                      <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>Banner Clicks</th>
-                      <th style={{ padding: '1rem', color: '#6b7280', fontWeight: 600, fontSize: '0.85rem', textTransform: 'uppercase' }}>CTR</th>
+                    <tr>
+                      <th>Post Title</th>
+                      <th>Total Views</th>
+                      <th>Banner Clicks</th>
+                      <th>CTR</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -916,19 +853,15 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                       const isHighCTR = parseFloat(ctr) > 10.0;
 
                       return (
-                        <tr key={post._id} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                          <td style={{ padding: '1rem', fontWeight: 600, color: '#1f2937' }}>
+                        <tr key={post._id}>
+                          <td style={{ fontWeight: 600, color: '#1f2937' }}>
                             <a href={`/admin/editor?id=${post._id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
                               {post.title}
                             </a>
                           </td>
-                          <td style={{ padding: '1rem', color: '#4b5563', fontWeight: 500 }}>
-                            {views.toLocaleString()}
-                          </td>
-                          <td style={{ padding: '1rem', color: '#4b5563', fontWeight: 500 }}>
-                            {clicks.toLocaleString()}
-                          </td>
-                          <td style={{ padding: '1rem', color: isHighCTR ? '#15803d' : '#4b5563', fontWeight: isHighCTR ? 700 : 500, backgroundColor: isHighCTR ? 'rgba(34, 197, 94, 0.1)' : 'transparent' }}>
+                          <td>{views.toLocaleString()}</td>
+                          <td>{clicks.toLocaleString()}</td>
+                          <td style={{ color: isHighCTR ? '#15803d' : '#4b5563', fontWeight: isHighCTR ? 700 : 500, backgroundColor: isHighCTR ? 'rgba(34, 197, 94, 0.1)' : 'transparent' }}>
                             {ctr}%
                           </td>
                         </tr>
@@ -944,10 +877,10 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
 
       {activeTab === 'banners' && (
         <div style={{ padding: '1rem 0' }}>
-          <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
+          <div className="banner-tabs">
             <button
               onClick={() => loadBannerToEdit('global')}
-              style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', backgroundColor: activeBannerTab === 'global' ? '#74b75c' : '#e5e7eb', color: activeBannerTab === 'global' ? 'white' : '#4b5563' }}
+              className={`banner-tab${activeBannerTab === 'global' ? ' active' : ''}`}
             >
               Global Banner
             </button>
@@ -955,20 +888,20 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
               <button
                 key={banner._id}
                 onClick={() => loadBannerToEdit(banner._id)}
-                style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', fontWeight: 600, border: 'none', cursor: 'pointer', backgroundColor: activeBannerTab === banner._id ? '#74b75c' : '#e5e7eb', color: activeBannerTab === banner._id ? 'white' : '#4b5563' }}
+                className={`banner-tab${activeBannerTab === banner._id ? ' active' : ''}`}
               >
                 {banner.name || 'Unnamed Campaign'}
               </button>
             ))}
             <button
               onClick={() => loadBannerToEdit('new')}
-              style={{ padding: '0.6rem 1.25rem', borderRadius: '8px', fontWeight: 600, border: '1px dashed #74b75c', cursor: 'pointer', backgroundColor: activeBannerTab === 'new' ? '#74b75c' : 'transparent', color: activeBannerTab === 'new' ? 'white' : '#74b75c' }}
+              className={`banner-tab banner-tab-new${activeBannerTab === 'new' ? ' active' : ''}`}
             >
               + Create Campaign
             </button>
           </div>
 
-          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '2rem', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+          <div className="banner-form-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', margin: 0 }}>
                 {editingBanner.type === 'global' ? 'Global Banner Settings' : (editingBanner._id ? 'Edit Campaign' : 'New Campaign')}
@@ -978,23 +911,22 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
               )}
             </div>
 
-            <div style={{ display: 'grid', gap: '1.5rem', maxWidth: '600px' }}>
+            <div className="banner-form-grid">
               {editingBanner.type === 'category' && (
                 <>
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>Campaign Name</label>
+                  <div className="banner-field">
+                    <label>Campaign Name</label>
                     <input
                       type="text"
                       value={editingBanner.name || ''}
                       onChange={e => setEditingBanner({ ...editingBanner, name: e.target.value })}
-                      style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb' }}
                       placeholder="e.g. Summer Sale 2026"
                     />
                   </div>
 
-                  <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>Target Categories</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f9fafb', padding: '1rem', borderRadius: '8px', border: '1px solid #e5e7eb', maxHeight: '200px', overflowY: 'auto' }}>
+                  <div className="banner-field">
+                    <label>Target Categories</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f9fafb', padding: '1rem', borderRadius: '9px', border: '1px solid #e5e7eb', maxHeight: '200px', overflowY: 'auto' }}>
                       {categories.map((cat, i) => (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           <input
@@ -1003,7 +935,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                             checked={(editingBanner.categories || []).includes(cat)}
                             onChange={() => handleCategoryCheckbox(cat)}
                           />
-                          <label htmlFor={`cat-${i}`} style={{ fontSize: '0.9rem', color: '#4b5563' }}>{cat}</label>
+                          <label htmlFor={`cat-${i}`} style={{ fontSize: '0.9rem', color: '#4b5563', fontWeight: 400, marginBottom: 0, display: 'inline' }}>{cat}</label>
                         </div>
                       ))}
                     </div>
@@ -1011,19 +943,19 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 </>
               )}
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>Image URL</label>
+              <div className="banner-field">
+                <label>Image URL</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <input
                     type="text"
                     value={editingBanner.promotion?.imageUrl || ''}
                     onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, imageUrl: e.target.value } })}
-                    style={{ flexGrow: 1, padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                    style={{ flexGrow: 1 }}
                     placeholder="https://..."
                   />
                   <button
                     onClick={handleBannerImageUpload}
-                    style={{ padding: '0.75rem 1.25rem', background: '#f3f4f6', border: '1px solid #e5e7eb', color: '#4b5563', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}
+                    style={{ padding: '0.75rem 1.25rem', background: '#f3f4f6', border: '1px solid #e5e7eb', color: '#4b5563', borderRadius: '9px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }}
                     onMouseOver={(e) => e.target.style.backgroundColor = '#e5e7eb'}
                     onMouseOut={(e) => e.target.style.backgroundColor = '#f3f4f6'}
                   >
@@ -1032,34 +964,31 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 </div>
               </div>
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>Promotion Text</label>
+              <div className="banner-field">
+                <label>Promotion Text</label>
                 <input
                   type="text"
                   value={editingBanner.promotion?.text || ''}
                   onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, text: e.target.value } })}
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb' }}
                   placeholder="Get 20% off..."
                 />
               </div>
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>Destination Link</label>
+              <div className="banner-field">
+                <label>Destination Link</label>
                 <input
                   type="text"
                   value={editingBanner.promotion?.link || ''}
                   onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, link: e.target.value } })}
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb' }}
                   placeholder="https://..."
                 />
               </div>
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>Placement</label>
+              <div className="banner-field">
+                <label>Placement</label>
                 <select
                   value={editingBanner.promotion?.placement || 'sidebar'}
                   onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, placement: e.target.value } })}
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb', backgroundColor: '#fff', outline: 'none' }}
                 >
                   <option value="sidebar">Sidebar</option>
                   <option value="post_top">Inside Post (Top)</option>
@@ -1067,13 +996,12 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 </select>
               </div>
 
-              <div>
-                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, color: '#4b5563' }}>End Date</label>
+              <div className="banner-field">
+                <label>End Date</label>
                 <input
                   type="date"
                   value={editingBanner.promotion?.endDate ? new Date(editingBanner.promotion.endDate).toISOString().split('T')[0] : ''}
                   onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, endDate: e.target.value } })}
-                  style={{ width: '100%', padding: '0.75rem', borderRadius: '8px', border: '1px solid #e5e7eb' }}
                 />
               </div>
 
@@ -1085,12 +1013,12 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                   onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, isActive: e.target.checked } })}
                   style={{ width: '1.25rem', height: '1.25rem' }}
                 />
-                <label htmlFor="isActive" style={{ fontWeight: 600, color: '#4b5563' }}>Enable this banner</label>
+                <label htmlFor="isActive" style={{ fontWeight: 600, color: '#4b5563', marginBottom: 0 }}>Enable this banner</label>
               </div>
 
               <button
                 onClick={handleSaveBanner}
-                style={{ marginTop: '1rem', padding: '0.75rem 1.5rem', background: '#74b75c', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer', fontSize: '1rem' }}
+                style={{ marginTop: '1rem', padding: '0.75rem 1.5rem', background: 'linear-gradient(135deg, #74b75c, #5e9e48)', color: 'white', border: 'none', borderRadius: '9px', fontWeight: 600, cursor: 'pointer', fontSize: '1rem', width: 'fit-content', boxShadow: '0 4px 10px rgba(116, 183, 92, 0.25)' }}
               >
                 Save Banner
               </button>
