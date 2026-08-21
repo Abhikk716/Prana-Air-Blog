@@ -595,19 +595,7 @@ function BlogEditorContent() {
 
 
       {notification.show && (
-        <div style={{
-          position: 'fixed',
-          top: '20px',
-          right: '20px',
-          padding: '1rem 1.5rem',
-          borderRadius: '8px',
-          backgroundColor: notification.type === 'error' ? '#ef4444' : '#10b981',
-          color: 'white',
-          boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
-          zIndex: 1000,
-          fontWeight: 600,
-          transition: 'all 0.3s ease'
-        }}>
+        <div className={`editor-toast ${notification.type === 'error' ? 'error' : 'success'}`}>
           {notification.message}
         </div>
       )}
@@ -615,7 +603,7 @@ function BlogEditorContent() {
       {/* Editor Header Navigation */}
       <div className="editor-header">
         <div className="header-title">
-          <a href="/admin/dashboard" style={{ display: 'inline-block', color: '#10b981', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: 600 }}>
+          <a href="/admin/dashboard" className="header-back-link">
             &larr; Back to Dashboard
           </a>
           <h1>{postId ? 'Edit Blog Post' : 'Write a New Post'}</h1>
@@ -646,107 +634,78 @@ function BlogEditorContent() {
         {/* Main Work Area */}
         <div className="main-editor-pane">
           {/* Translation Tab Bar */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem', borderBottom: '2px solid #fbfbfbff', paddingBottom: '0.75rem' }}>
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowLangSelectModal(true)}
-                style={{
-                  padding: '0.6rem 1.25rem',
-                  borderRadius: '8px',
-                  border: '1px solid #e5e7eb',
-                  backgroundColor: '#fff',
-                  color: '#1f2937',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  fontSize: '0.9rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  transition: 'all 0.2s',
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                }}
-              >
-                Editing Language: {allLanguages.find(l => l.code === selectedLang)?.label || 'Global English (EN)'}
-                <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>▼</span>
-              </button>
+          <div className="editor-toolbar">
+            <button
+              type="button"
+              onClick={() => setShowLangSelectModal(true)}
+              className="lang-select-btn"
+            >
+              Editing Language: {allLanguages.find(l => l.code === selectedLang)?.label || 'Global English (EN)'}
+              <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>▼</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowTranslateModal(true)}
+              className="translate-btn"
+            >
+              Auto Translate
+            </button>
+          </div>
+
+          <div className="main-editor-card">
+            <div className="form-group">
+              <label className="form-label">Post Title ({selectedLang.toUpperCase()})</label>
+              <input
+                type="text"
+                className="input-text"
+                placeholder={`Enter ${selectedLang === 'en' ? 'English' : 'translated'} title here...`}
+                value={title}
+                onChange={(e) => onTitleChange(e.target.value)}
+              />
             </div>
-            <div>
-              <button
-                type="button"
-                onClick={() => setShowTranslateModal(true)}
-                style={{
-                  backgroundColor: '#63a44d',
-                  color: 'white',
-                  border: 'none',
-                  padding: '0.6rem 1.25rem',
-                  borderRadius: '8px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  fontSize: '0.9rem',
-                }}
-              >
-                Auto Translate
-              </button>
+
+            <div className="form-group">
+              <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>URL Slug</span>
+                <button
+                  type="button"
+                  onClick={() => setIsSlugLocked(!isSlugLocked)}
+                  style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '0.8125rem' }}
+                >
+                  {isSlugLocked ? 'Edit Slug' : 'Lock Slug'}
+                </button>
+              </label>
+              <input
+                type="text"
+                className="input-text"
+                value={slug}
+                disabled={isSlugLocked}
+                onChange={(e) => setSlug(e.target.value)}
+                placeholder="url-friendly-slug-will-appear-here"
+              />
             </div>
-          </div>
 
-          <div className="form-group">
-            <label className="form-label">Post Title ({selectedLang.toUpperCase()})</label>
-            <input
-              type="text"
-              className="input-text"
-              placeholder={`Enter ${selectedLang === 'en' ? 'English' : 'translated'} title here...`}
-              value={title}
-              onChange={(e) => onTitleChange(e.target.value)}
-            />
-          </div>
+            <div className="form-group">
+              <label className="form-label">Excerpt / Summary ({selectedLang.toUpperCase()})</label>
+              <input
+                type="text"
+                className="input-text"
+                placeholder={`Brief overview of the article in ${selectedLang.toUpperCase()}...`}
+                value={excerpt}
+                onChange={(e) => onExcerptChange(e.target.value)}
+              />
+            </div>
 
-          <div className="form-group">
-            <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>URL Slug</span>
-              <button
-                type="button"
-                onClick={() => setIsSlugLocked(!isSlugLocked)}
-                style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '0.8125rem' }}
-              >
-                {isSlugLocked ? 'Edit Slug' : 'Lock Slug'}
-              </button>
-            </label>
-            <input
-              type="text"
-              className="input-text"
-              value={slug}
-              disabled={isSlugLocked}
-              onChange={(e) => setSlug(e.target.value)}
-              placeholder="url-friendly-slug-will-appear-here"
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Excerpt / Summary ({selectedLang.toUpperCase()})</label>
-            <input
-              type="text"
-              className="input-text"
-              placeholder={`Brief overview of the article in ${selectedLang.toUpperCase()}...`}
-              value={excerpt}
-              onChange={(e) => onExcerptChange(e.target.value)}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Content Editor</label>
-            <div className="rich-editor-wrapper">
-              <Editor
-                tinymceScriptSrc="https://cdnjs.cloudflare.com/ajax/libs/tinymce/7.3.0/tinymce.min.js"
-                onInit={(evt, editor) => editorRef.current = editor}
-                value={content}
-                onEditorChange={handleEditorChange}
-                init={{
-                  height: 600,
+            <div className="form-group">
+              <label className="form-label">Content Editor</label>
+              <div className="rich-editor-wrapper">
+                <Editor
+                  tinymceScriptSrc="https://cdnjs.cloudflare.com/ajax/libs/tinymce/7.3.0/tinymce.min.js"
+                  onInit={(evt, editor) => editorRef.current = editor}
+                  value={content}
+                  onEditorChange={handleEditorChange}
+                  init={{
+                    height: 660,
                   branding: false,
                   promotion: false,
                   menubar: true,
@@ -949,6 +908,7 @@ function BlogEditorContent() {
                 }}
               />
             </div>
+          </div>
           </div>
         </div>
 
@@ -1168,19 +1128,12 @@ function BlogEditorContent() {
       </div>
 
       {showTranslateModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999,
-          display: 'flex', justifyContent: 'center', alignItems: 'center'
-        }}>
-          <div style={{
-            background: 'white', padding: '2rem', borderRadius: '12px',
-            width: '90%', maxWidth: '400px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
-          }}>
+        <div className="modal-overlay">
+          <div className="modal-card modal-sm">
             <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#1f2937' }}>Auto-Translate Post</h3>
             <p style={{ fontSize: '0.9rem', color: '#4b5563', marginBottom: '1.5rem' }}>Select the languages you want to translate the English content to.</p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.5rem' }}>
+            <div className="translate-lang-grid">
               {Object.entries({ hi: 'Hindi', es: 'Spanish', de: 'German', fr: 'French', ru: 'Russian', ja: 'Japanese', pt: 'Portuguese' }).map(([code, name]) => (
                 <label key={code} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
                   <input
@@ -1216,16 +1169,8 @@ function BlogEditorContent() {
 
       {/* Language Select Modal */}
       {showLangSelectModal && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000,
-          display: 'flex', justifyContent: 'center', alignItems: 'center'
-        }}>
-          <div style={{
-            background: 'white', padding: '2rem', borderRadius: '12px',
-            width: '90%', maxWidth: '600px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)',
-            maxHeight: '90vh', overflowY: 'auto'
-          }}>
+        <div className="modal-overlay">
+          <div className="modal-card modal-lg">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h3 style={{ margin: 0, color: '#1f2937' }}>Select Language to Edit</h3>
               <button
@@ -1238,7 +1183,7 @@ function BlogEditorContent() {
 
             <div style={{ marginBottom: '2rem' }}>
               <h4 style={{ color: '#4b5563', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.5rem', marginBottom: '1rem' }}>English Variants (Original Content)</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
+              <div className="lang-grid">
                 {allLanguages.filter(l => l.group === 'English Variants').map(lang => {
                   const isActive = selectedLang === lang.code;
                   const hasContent = lang.code === 'en' ? title.trim() !== '' : (editorData[lang.code]?.title?.trim() || '') !== '';
@@ -1249,11 +1194,7 @@ function BlogEditorContent() {
                         handleLangChange(lang.code);
                         setShowLangSelectModal(false);
                       }}
-                      style={{
-                        padding: '0.75rem', borderRadius: '8px', border: isActive ? '2px solid #10b981' : '1px solid #e5e7eb',
-                        backgroundColor: isActive ? '#f0fdf4' : 'white', color: '#374151', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left', fontWeight: 500
-                      }}
+                      className={`lang-option${isActive ? ' active' : ''}`}
                     >
                       <span>{lang.label}</span>
                       {hasContent && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} title="Has Content" />}
@@ -1265,7 +1206,7 @@ function BlogEditorContent() {
 
             <div>
               <h4 style={{ color: '#4b5563', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Translations</h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
+              <div className="lang-grid">
                 {allLanguages.filter(l => l.group === 'Translations').map(lang => {
                   const isActive = selectedLang === lang.code;
                   const hasContent = (editorData[lang.code]?.title?.trim() || '') !== '';
@@ -1276,11 +1217,7 @@ function BlogEditorContent() {
                         handleLangChange(lang.code);
                         setShowLangSelectModal(false);
                       }}
-                      style={{
-                        padding: '0.75rem', borderRadius: '8px', border: isActive ? '2px solid #10b981' : '1px solid #e5e7eb',
-                        backgroundColor: isActive ? '#f0fdf4' : 'white', color: '#374151', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', textAlign: 'left', fontWeight: 500
-                      }}
+                      className={`lang-option${isActive ? ' active' : ''}`}
                     >
                       <span>{lang.label}</span>
                       {hasContent && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} title="Has Content" />}

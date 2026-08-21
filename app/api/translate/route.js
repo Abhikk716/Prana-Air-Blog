@@ -1,22 +1,23 @@
 import { NextResponse } from 'next/server';
-import connectDB from '../../../lib/db';
-import Settings from '../../../models/Settings';
+import { isAdminAuthenticated } from '../../../lib/adminAuth';
 import Anthropic from '@anthropic-ai/sdk';
 
 export async function POST(req) {
   try {
+    if (!(await isAdminAuthenticated())) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { title, excerpt, content, targetLanguages } = await req.json();
 
     if (!targetLanguages || targetLanguages.length === 0) {
       return NextResponse.json({ success: false, error: 'No target languages provided' }, { status: 400 });
     }
 
-    await connectDB();
-    const settings = await Settings.findOne({});
-    const apiKey = settings?.anthropicApiKey || process.env.CLAUDE_API_KEY;
+    const apiKey = process.env.CLAUDE_API_KEY;
 
     if (!apiKey) {
-      return NextResponse.json({ success: false, error: 'Anthropic API Key is missing. Please add it in settings.' }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Anthropic API Key is missing. Set CLAUDE_API_KEY in the environment.' }, { status: 400 });
     }
 
     const anthropic = new Anthropic({

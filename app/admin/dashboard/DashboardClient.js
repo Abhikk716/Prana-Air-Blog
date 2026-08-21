@@ -10,6 +10,8 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  const [dateFilter, setDateFilter] = useState('');
+  const [languageFilter, setLanguageFilter] = useState('all');
 
   // Analytics filters & state
   const [analyticsTimeFilter, setAnalyticsTimeFilter] = useState('all');
@@ -38,52 +40,10 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   });
 
   const [activeBannerTab, setActiveBannerTab] = useState('global');
-  
-  const [settings, setSettings] = useState({ anthropicApiKey: '' });
-  const [loadingSettings, setLoadingSettings] = useState(false);
-  const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
     fetchBanners();
-    fetchSettings();
   }, []);
-
-  const fetchSettings = async () => {
-    setLoadingSettings(true);
-    try {
-      const res = await fetch('/api/settings');
-      const data = await res.json();
-      if (data.success && data.data) {
-        setSettings(data.data);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoadingSettings(false);
-    }
-  };
-
-  const handleSaveSettings = async () => {
-    setSavingSettings(true);
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings)
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert('Settings saved successfully');
-      } else {
-        alert(data.error || 'Failed to save settings');
-      }
-    } catch (err) {
-      console.error(err);
-      alert('Network error');
-    } finally {
-      setSavingSettings(false);
-    }
-  };
 
   const fetchBanners = async () => {
     setLoadingBanners(true);
@@ -315,8 +275,19 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
     const matchesCategory =
       categoryFilter === 'all' ||
       (post.categories && post.categories.includes(categoryFilter));
+      
+    let matchesDate = true;
+    if (dateFilter) {
+      const postDate = new Date(post.publishedAt || post.createdAt).toISOString().split('T')[0];
+      matchesDate = postDate.startsWith(dateFilter);
+    }
 
-    return matchesSearch && matchesStatus && matchesCategory;
+    let matchesLanguage = true;
+    if (languageFilter !== 'all') {
+      matchesLanguage = post.translations && post.translations[languageFilter];
+    }
+
+    return matchesSearch && matchesStatus && matchesCategory && matchesDate && matchesLanguage;
   });
 
   filteredPosts = [...filteredPosts].sort((a, b) => {
@@ -357,20 +328,28 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
       });
     }
 
-    const getBannerForPost = (post) => {
-      if (post.promotion && post.promotion.isActive && new Date(post.promotion.endDate) >= new Date()) {
+    // `requireCurrentlyActive` gates on the banner's live isActive/endDate state.
+    // We only have the CURRENT banner config (no historical log of which campaign
+    // was live on a given past day), so for "all time" totals we attribute using
+    // today's active campaign, but for a historical date range we relax that gate
+    // — otherwise a campaign that has since ended would silently lose all of its
+    // past clicks/views instead of being reported under its own name.
+    const getBannerForPost = (post, requireCurrentlyActive) => {
+      const isLive = (promotion) => !requireCurrentlyActive || (promotion?.isActive && new Date(promotion.endDate) >= new Date());
+
+      if (post.promotion && isLive(post.promotion)) {
         return null; // Post specific
       }
       if (post.categories && post.categories.length > 0) {
         for (const cat of post.categories) {
-          const catBanner = bannerSettings.find(b => b.type === 'category' && b.categories?.includes(cat) && b.promotion?.isActive);
-          if (catBanner && new Date(catBanner.promotion.endDate) >= new Date()) {
+          const catBanner = bannerSettings.find(b => b.type === 'category' && b.categories?.includes(cat) && isLive(b.promotion));
+          if (catBanner) {
             return catBanner._id;
           }
         }
       }
-      const global = bannerSettings.find(b => b.type === 'global' && b.promotion?.isActive);
-      if (global && new Date(global.promotion.endDate) >= new Date()) {
+      const global = bannerSettings.find(b => b.type === 'global' && isLive(b.promotion));
+      if (global) {
         return 'global';
       }
       return null;
@@ -400,7 +379,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
           });
         }
 
-        const bannerId = getBannerForPost(post);
+        const bannerId = getBannerForPost(post, true);
         if (bannerId && campaignStats[bannerId]) {
           campaignStats[bannerId].views += v;
           campaignStats[bannerId].clicks += c;
@@ -433,7 +412,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
           });
         }
 
-        const bannerId = getBannerForPost(post);
+        const bannerId = getBannerForPost(post, false);
         if (bannerId && campaignStats[bannerId]) {
           campaignStats[bannerId].views += (d.views || 0);
           campaignStats[bannerId].clicks += (d.promotionClicks || 0);
@@ -490,18 +469,21 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
 
   const COLORS = ['#74b75c', '#0891b2', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b', '#10b981'];
 
+  const TAB_META = {
+    analytics: { title: 'Analytics', subtitle: 'Track your blog performance, views, and banner clicks.' },
+    posts: { title: 'CMS Dashboard', subtitle: 'Manage your blog posts, draft articles, and track SEO metrics.' },
+    banners: { title: 'Banner Campaigns', subtitle: 'Configure global and category-targeted promotion banners.' },
+  };
+
   return (
     <div className="dashboard-container">
       <div className="dashboard-header">
         <div>
           <h1 style={{ fontSize: '2rem', fontWeight: 800, margin: 0, color: '#1f2937' }}>
-            {activeTab === 'analytics' ? 'Analytics' : 'CMS Dashboard'}
+            {TAB_META[activeTab]?.title || 'CMS Dashboard'}
           </h1>
           <p style={{ color: '#6b7280', fontSize: '0.9rem', marginTop: '0.25rem' }}>
-            {activeTab === 'analytics'
-              ? 'Track your blog performance, views, and banner clicks.'
-              : 'Manage your blog posts, draft articles, and track SEO metrics.'
-            }
+            {TAB_META[activeTab]?.subtitle || ''}
           </p>
         </div>
 
@@ -584,6 +566,44 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 <option key={i} value={cat}>{cat}</option>
               ))}
             </select>
+
+            <select
+              value={languageFilter}
+              onChange={(e) => setLanguageFilter(e.target.value)}
+              style={{
+                padding: '0.75rem 1rem',
+                backgroundColor: '#ffffff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                color: '#1f2937',
+                fontSize: '0.9rem',
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="all">All Languages</option>
+              {['en', 'in', 'us', 'en-GB', 'en-CA', 'en-AU', 'sg', 'hi', 'fr', 'de', 'es', 'ru', 'ja', 'pt-PT'].map(lang => (
+                <option key={lang} value={lang}>{lang.toUpperCase()}</option>
+              ))}
+            </select>
+
+            <input
+              type={dateFilter ? "month" : "text"}
+              placeholder="Filter by Month"
+              onFocus={(e) => (e.target.type = "month")}
+              onBlur={(e) => { if (!dateFilter) e.target.type = "text"; }}
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value)}
+              style={{
+                padding: '0.75rem 1rem',
+                backgroundColor: '#ffffff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                color: '#1f2937',
+                fontSize: '0.9rem',
+                outline: 'none',
+              }}
+            />
 
             <select
               value={sortBy}
@@ -1078,7 +1098,6 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
           </div>
         </div>
       )}
-
 
     </div>
   );

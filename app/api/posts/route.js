@@ -1,5 +1,6 @@
 import connectDB from '../../../lib/db';
 import Post from '../../../models/post';
+import { isAdminAuthenticated } from '../../../lib/adminAuth';
 
 // CORS headers – allow any origin to fetch blog content (public API)
 const CORS_HEADERS = {
@@ -55,10 +56,13 @@ export async function GET(request) {
     if (category) query.categories = category;
     if (tag) query.tags = tag;
     if (search) {
+      // Escape regex metacharacters so user input can't build an expensive
+      // or unintended pattern (regex injection / ReDoS risk on a public endpoint).
+      const safeSearch = search.slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       query.$or = [
-        { title: { $regex: search, $options: 'i' } },
-        { content: { $regex: search, $options: 'i' } },
-        { excerpt: { $regex: search, $options: 'i' } },
+        { title: { $regex: safeSearch, $options: 'i' } },
+        { content: { $regex: safeSearch, $options: 'i' } },
+        { excerpt: { $regex: safeSearch, $options: 'i' } },
       ];
     }
 
@@ -98,6 +102,10 @@ export async function GET(request) {
 // POST /api/posts - Create a new blog post
 export async function POST(request) {
   try {
+    if (!(await isAdminAuthenticated())) {
+      return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     await connectDB();
     const body = await request.json();
 

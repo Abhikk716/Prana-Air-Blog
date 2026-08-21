@@ -1,6 +1,7 @@
 import connectDB from '../../../../lib/db';
 import Post from '../../../../models/post';
 import BannerSettings from '../../../../models/BannerSettings';
+import { isAdminAuthenticated } from '../../../../lib/adminAuth';
 import mongoose from 'mongoose';
 
 // CORS headers
@@ -143,6 +144,10 @@ export async function GET(request, { params }) {
 // PUT /api/posts/[id] - Update an existing post by ID or Slug
 export async function PUT(request, { params }) {
   try {
+    if (!(await isAdminAuthenticated())) {
+      return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
     const body = await request.json();
@@ -180,6 +185,10 @@ export async function PUT(request, { params }) {
 // DELETE /api/posts/[id] - Delete a post by ID or Slug
 export async function DELETE(request, { params }) {
   try {
+    if (!(await isAdminAuthenticated())) {
+      return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     await connectDB();
     const { id } = await params;
 

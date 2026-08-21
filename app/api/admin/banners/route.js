@@ -1,10 +1,15 @@
 import { NextResponse } from 'next/server';
 import connectDB from '../../../../lib/db';
 import BannerSettings from '../../../../models/BannerSettings';
+import { isAdminAuthenticated } from '../../../../lib/adminAuth';
 
 // GET all banner settings (global and category)
 export async function GET(req) {
   try {
+    if (!(await isAdminAuthenticated())) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     await connectDB();
     const banners = await BannerSettings.find({});
     return NextResponse.json({ success: true, banners });
@@ -17,6 +22,10 @@ export async function GET(req) {
 // POST to create or update a banner setting
 export async function POST(req) {
   try {
+    if (!(await isAdminAuthenticated())) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     await connectDB();
     const data = await req.json();
     const { _id, type, name, categories, promotion } = data;
@@ -56,6 +65,10 @@ export async function POST(req) {
 // DELETE a custom banner
 export async function DELETE(req) {
   try {
+    if (!(await isAdminAuthenticated())) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
     await connectDB();
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');

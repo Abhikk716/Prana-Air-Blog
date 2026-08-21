@@ -9,8 +9,10 @@ export async function POST(request) {
   try {
     const { slug, action, lang } = await request.json();
     
-    // Get client IP
-    const ip = request.headers.get('x-forwarded-for') || request.ip || 'unknown-ip';
+    // Get client IP (first hop of x-forwarded-for; trustworthy behind Vercel's
+    // edge network, but note this header can be spoofed on self-hosted setups
+    // without a trusted reverse proxy in front of Next.js)
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || request.ip || 'unknown-ip';
     const cacheKey = `${ip}_${slug}_${action}`;
     
     // Simple Rate Limiting: Prevent duplicate action from same IP within the window
