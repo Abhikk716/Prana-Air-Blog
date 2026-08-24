@@ -10,16 +10,149 @@ import Anthropic from '@anthropic-ai/sdk';
 // the divisor and buffer below are deliberately conservative.
 const estimateTokens = (str) => Math.ceil((str || '').length / 2.2);
 
+const LANG_NAMES = {
+  hi: 'Hindi', es: 'Spanish', de: 'German', fr: 'French', ru: 'Russian', ja: 'Japanese', 'pt-PT': 'Portuguese'
+};
+
+// Long articles need many text snippets translated per call. That used to
+// go through the tool schema as content_segments: array-of-strings, but the
+// model would sometimes hand that array back as a single JSON-stringified
+// string instead of a real array — injectTextSegments then indexed into
+// that string char-by-char, silently writing one character into each
+// heading/paragraph instead of the translated text. Shrinking the chunk
+// size cut how *often* this happened but never to zero (still hit on one
+// small German chunk, and 4 same-prompt retries at low temperature aren't
+// independent enough to reliably escape it once a chunk is prone to it).
+// So the array is gone: the model instead returns ONE string with segments
+// joined by SEGMENT_DELIMITER, which sidesteps the array/string ambiguity
+// entirely — there's no array-shaped value to accidentally serialize into
+// a string. Chunking (below) is kept only to bound how much text goes
+// through a single call, not to work around this bug.
+const CHARS_PER_CALL = 3000;
+const SEGMENT_DELIMITER = '@@SEG@@';
+
+const translationTool = {
+  name: 'provide_translation',
+  description: 'Submit the translated blog post fields.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      title: { type: 'string' },
+      excerpt: { type: 'string' },
+      content_blob: {
+        type: 'string',
+        description: `All translated content segments, in the same order as the input, joined into one string using the exact literal separator "${SEGMENT_DELIMITER}" between each segment (not before the first or after the last).`
+      }
+    },
+    required: ['title', 'excerpt', 'content_blob']
+  }
+};
+
+// Groups segments into chunks so each chunk's own text stays under
+// `charBudget` characters — a single very long segment still gets its own
+// (oversized) chunk rather than being split mid-sentence.
+function chunkByCharBudget(items, charBudget) {
+  const chunks = [];
+  let current = [];
+  let currentLen = 0;
+  for (const item of items) {
+    const len = item.length;
+    if (current.length > 0 && currentLen + len > charBudget) {
+      chunks.push(current);
+      current = [];
+      currentLen = 0;
+    }
+    current.push(item);
+    currentLen += len;
+  }
+  if (current.length > 0) chunks.push(current);
+  return chunks.length ? chunks : [[]];
+}
+
+// Splits the delimiter-joined blob back into segments and rejects (returns
+// null) anything that doesn't split into exactly the expected count, so a
+// bad generation is retried rather than saved as corrupted/misaligned
+// content.
+function normalizeContentSegments(contentBlob, expectedLength) {
+  if (typeof contentBlob !== 'string') return null;
+  const segments = contentBlob.split(SEGMENT_DELIMITER);
+  if (segments.length !== expectedLength) return null;
+  return segments;
+}
+
+async function translateChunk({ anthropic, langName, title, excerpt, chunkSegments, includeTitleExcerpt }) {
+  const numberedList = chunkSegments.map((s, i) => `${i + 1}. ${s}`).join('\n');
+
+  const prompt = `You are an expert translator. Translate the following ${chunkSegments.length} numbered text snippets into ${langName}, then call the provide_translation tool with the result.
+
+RULES:
+1. Translate every snippet below. Keep them in the exact same order — never merge, split, drop, or reorder any of the ${chunkSegments.length} items. If a snippet is not translatable (e.g. a number or symbol), return it unchanged.
+2. In "content_blob", output the ${chunkSegments.length} translated snippets joined by the literal separator "${SEGMENT_DELIMITER}" — one snippet, then "${SEGMENT_DELIMITER}", then the next snippet, and so on. Do not include the numbering, and do not put a separator before the first snippet or after the last one.
+3. Preserve any quotation marks, quoted speech, or punctuation that appears in the source text.
+${includeTitleExcerpt ? '' : '4. This is a mid-article continuation, not the start of the post — set "title" and "excerpt" to empty strings.'}
+
+${includeTitleExcerpt ? `TITLE: ${title || ''}\n\nEXCERPT: ${excerpt || ''}\n\n` : ''}SNIPPETS:
+${numberedList}`;
+
+  const estimatedOutputTokens = Math.ceil(
+    (estimateTokens(title) + estimateTokens(excerpt) + estimateTokens(numberedList)) * 2.5
+  );
+  const maxTokens = Math.min(64000, Math.max(4000, estimatedOutputTokens));
+
+  let lastError = 'came back malformed.';
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const stream = anthropic.messages.stream({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: maxTokens,
+      // Nudge temperature up on retries — a same-prompt retry at a fixed
+      // low temperature can reproduce the same malformed output rather
+      // than a fresh, correctly-shaped one.
+      temperature: Math.min(0.1 + attempt * 0.2, 0.7),
+      tools: [translationTool],
+      tool_choice: { type: 'tool', name: 'provide_translation' },
+      messages: [{ role: 'user', content: prompt }]
+    });
+    const response = await stream.finalMessage();
+
+    if (response.stop_reason === 'max_tokens') {
+      return { ok: false, error: 'cut off — this section is too long to translate in one pass.' };
+    }
+
+    const toolUse = response.content.find(block => block.type === 'tool_use');
+    if (!toolUse || !toolUse.input) {
+      lastError = 'no translation returned.';
+      console.warn(`[translate] ${langName} chunk attempt ${attempt + 1}: ${lastError} retrying...`);
+      continue;
+    }
+
+    const contentSegments = normalizeContentSegments(toolUse.input.content_blob, chunkSegments.length);
+    if (!contentSegments) {
+      lastError = 'came back malformed.';
+      console.warn(`[translate] ${langName} chunk attempt ${attempt + 1}: ${lastError} retrying...`);
+      continue;
+    }
+
+    return {
+      ok: true,
+      title: toolUse.input.title || '',
+      excerpt: toolUse.input.excerpt || '',
+      contentSegments
+    };
+  }
+
+  return { ok: false, error: lastError };
+}
+
 export async function POST(req) {
   try {
     if (!(await isAdminAuthenticated())) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { title, excerpt, content, targetLanguages } = await req.json();
+    const { title, excerpt, content, targetLanguage } = await req.json();
 
-    if (!targetLanguages || targetLanguages.length === 0) {
-      return NextResponse.json({ success: false, error: 'No target languages provided' }, { status: 400 });
+    if (!targetLanguage) {
+      return NextResponse.json({ success: false, error: 'No target language provided' }, { status: 400 });
     }
 
     const apiKey = process.env.CLAUDE_API_KEY;
@@ -28,8 +161,14 @@ export async function POST(req) {
       return NextResponse.json({ success: false, error: 'Anthropic API Key is missing. Set CLAUDE_API_KEY in the environment.' }, { status: 400 });
     }
 
+    // Translating all 7 languages fires 7 of these requests at once (from
+    // the client's concurrency-capped pool), each of which may itself issue
+    // several sequential chunk calls below. maxRetries lets the SDK itself
+    // absorb a transient 429/5xx with exponential backoff before it ever
+    // reaches our own catch block.
     const anthropic = new Anthropic({
       apiKey: apiKey,
+      maxRetries: 5,
     });
 
     // Pull out only the human-readable text from the content HTML — the
@@ -41,72 +180,54 @@ export async function POST(req) {
     // which also guarantees it can't be subtly altered by the model.
     const { segments } = extractTextSegments(content);
 
-    // Convert language codes to full names for better translation
-    const langNames = {
-      hi: 'Hindi', es: 'Spanish', de: 'German', fr: 'French', ru: 'Russian', ja: 'Japanese', pt: 'Portuguese'
+    const langName = LANG_NAMES[targetLanguage] || targetLanguage;
+
+    // Chunk the article and translate each piece with its own call, run
+    // sequentially (chunk N+1 only starts once N finishes) — this keeps
+    // Anthropic request concurrency bounded to the client's per-language
+    // cap instead of multiplying it by chunk count, at the cost of some
+    // wall-clock time on very long posts.
+    const chunks = chunkByCharBudget(segments, CHARS_PER_CALL);
+    const chunkResults = [];
+    for (let i = 0; i < chunks.length; i++) {
+      const result = await translateChunk({
+        anthropic,
+        langName,
+        title,
+        excerpt,
+        chunkSegments: chunks[i],
+        includeTitleExcerpt: i === 0
+      });
+      if (!result.ok) {
+        console.error(`Translation failed for ${targetLanguage} (chunk ${i + 1}/${chunks.length}): ${result.error}`);
+        return NextResponse.json({ success: false, error: `${langName} translation ${result.error}` }, { status: 500 });
+      }
+      chunkResults.push(result);
+    }
+
+    const contentSegments = chunkResults.flatMap(r => r.contentSegments);
+
+    // Rebuild the full HTML by re-parsing the original content and
+    // swapping in the translated text nodes — the tag structure/styles are
+    // never touched.
+    const { $, textNodes } = extractTextSegments(content);
+    const translation = {
+      title: chunkResults[0].title,
+      excerpt: chunkResults[0].excerpt,
+      content: injectTextSegments($, textNodes, contentSegments)
     };
 
-    const requestedNames = targetLanguages.map(l => langNames[l] || l);
-
-    const prompt = `You are an expert translator. Translate the following blog post data into these languages: ${requestedNames.join(', ')}.
-
-RULES:
-1. "content_segments" is a JSON array of text snippets taken from the post body, in reading order. Translate each string. Return them in the exact same order and with the exact same array length — never merge, split, drop, or reorder items. If a snippet is not translatable (e.g. a number or symbol), return it unchanged.
-2. Return the output STRICTLY as a valid JSON object where the keys are the exact language codes (${targetLanguages.join(', ')}) and each value is an object containing "title", "excerpt", and "content_segments".
-3. Do not include markdown code blocks or any extra text around the JSON output.
-
-TITLE: ${title || ''}
-
-EXCERPT: ${excerpt || ''}
-
-CONTENT_SEGMENTS: ${JSON.stringify(segments)}`;
-
-    // Size max_tokens off the actual content instead of a flat guess — a
-    // fixed low cap silently truncates (and breaks JSON parsing on) longer
-    // posts translated into several languages at once.
-    const perLanguageTokens = estimateTokens(title) + estimateTokens(excerpt) + estimateTokens(JSON.stringify(segments));
-    const estimatedOutputTokens = Math.ceil(perLanguageTokens * targetLanguages.length * 2.5);
-    const maxTokens = Math.min(64000, Math.max(8000, estimatedOutputTokens));
-
-    // Stream server-side (still returns one JSON response to the client) —
-    // avoids serverless HTTP timeouts on the larger max_tokens values long
-    // multi-language translations can need.
-    const stream = anthropic.messages.stream({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: maxTokens,
-      temperature: 0.1,
-      messages: [{ role: 'user', content: prompt }]
-    });
-    const response = await stream.finalMessage();
-
-    const responseText = response.content[0].text.trim();
-    let parsedResult;
-    try {
-      // In case Claude wraps the JSON in markdown blocks
-      const jsonStr = responseText.replace(/```json\n?|```/g, '');
-      parsedResult = JSON.parse(jsonStr);
-    } catch (parseError) {
-      console.error('Failed to parse Claude response:', responseText);
-      return NextResponse.json({ success: false, error: 'Translation parsing failed.' }, { status: 500 });
-    }
-
-    // Rebuild each language's full HTML by re-parsing the original content
-    // and swapping in that language's translated text nodes — the tag
-    // structure/styles are never touched.
-    const translations = {};
-    for (const [lang, data] of Object.entries(parsedResult)) {
-      const { $, textNodes } = extractTextSegments(content);
-      translations[lang] = {
-        title: data.title || '',
-        excerpt: data.excerpt || '',
-        content: injectTextSegments($, textNodes, data.content_segments)
-      };
-    }
-
-    return NextResponse.json({ success: true, translations });
+    return NextResponse.json({ success: true, lang: targetLanguage, translation });
 
   } catch (error) {
     console.error('Translation Error:', error);
-    return NextResponse.json({ success: false, error: error.message || 'Translation failed' }, { status: 500 });
+    // Surface rate limits as 429 (rather than a flat 500) so the client's
+    // retry logic can back off and try this language again instead of
+    // marking it permanently failed.
+    const status = error?.status === 429 ? 429 : 500;
+    const message = status === 429
+      ? 'Rate limited by the translation API — will retry automatically.'
+      : (error.message || 'Translation failed');
+    return NextResponse.json({ success: false, error: message }, { status });
   }
 }

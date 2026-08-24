@@ -20,8 +20,50 @@ const allLanguages = [
   { code: 'fr', label: 'French (FR)', group: 'Translations' },
   { code: 'ru', label: 'Russian (RU)', group: 'Translations' },
   { code: 'ja', label: 'Japanese (JA)', group: 'Translations' },
-  { code: 'pt', label: 'Portuguese (PT)', group: 'Translations' }
+  { code: 'pt-PT', label: 'Portuguese (PT)', group: 'Translations' }
 ];
+
+// Retries a single language's translation request on a 429 (rate limited)
+// with exponential backoff before giving up on it.
+async function fetchTranslation({ title, excerpt, content, lang }, attempt = 0) {
+  const res = await fetch('/api/translate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, excerpt, content, targetLanguage: lang })
+  });
+  const data = await res.json();
+
+  if (res.status === 429 && attempt < 4) {
+    const waitMs = 1500 * Math.pow(2, attempt); // 1.5s, 3s, 6s, 12s
+    await new Promise(resolve => setTimeout(resolve, waitMs));
+    return fetchTranslation({ title, excerpt, content, lang }, attempt + 1);
+  }
+
+  if (!data.success) throw new Error(data.error || 'Translation failed');
+  return data.translation;
+}
+
+// Runs `worker` over `items` with at most `limit` running at once (a new
+// one starts as soon as a slot frees up). Translating all 7 languages at
+// full concurrency sends more requests per second than the translation
+// API's rate limit reliably absorbs; capping it keeps the burst well under
+// that limit while still translating far faster than one at a time.
+async function runWithConcurrency(items, limit, worker) {
+  const results = new Array(items.length);
+  let next = 0;
+  const lanes = new Array(Math.min(limit, items.length)).fill(0).map(async () => {
+    while (next < items.length) {
+      const i = next++;
+      try {
+        results[i] = { status: 'fulfilled', value: await worker(items[i]) };
+      } catch (err) {
+        results[i] = { status: 'rejected', reason: err };
+      }
+    }
+  });
+  await Promise.all(lanes);
+  return results;
+}
 
 function BlogEditorContent() {
   const [title, setTitle] = useState('');
@@ -178,8 +220,14 @@ function BlogEditorContent() {
   const [showLangSelectModal, setShowLangSelectModal] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [translateLangs, setTranslateLangs] = useState({
-    hi: true, es: true, de: true, fr: true, ru: true, ja: true, pt: true
+    hi: true, es: true, de: true, fr: true, ru: true, ja: true, 'pt-PT': true
   });
+  // Per-language status while a translation run is in flight, drives the
+  // progress list in the modal: 'pending' | 'success' | 'error'.
+  const [translateProgress, setTranslateProgress] = useState({});
+  // Per-language busy state for the delete/re-translate actions in the
+  // language-select modal: 'deleting' | 'retranslating' | undefined.
+  const [langActionBusy, setLangActionBusy] = useState({});
 
   const handleTranslateAll = async () => {
     const targetLanguages = Object.keys(translateLangs).filter(l => translateLangs[l]);
@@ -199,44 +247,72 @@ function BlogEditorContent() {
     }
 
     setTranslating(true);
-    try {
-      const res = await fetch('/api/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: currentTitle,
-          excerpt: currentExcerpt,
-          content: currentContent,
-          targetLanguages
-        })
+    const initialProgress = {};
+    targetLanguages.forEach(l => { initialProgress[l] = 'pending'; });
+    setTranslateProgress(initialProgress);
+
+    // Translate each language with its own request instead of asking the
+    // model for every selected language in a single generation — batching
+    // them all into one call meant the required output (full article x N
+    // languages) could blow past the model's max_tokens cap on long/old
+    // posts. Per-language requests keep each call bounded by the post's own
+    // size, let unrelated languages succeed even if one fails, and (capped
+    // to 3 at a time, with 429 retry-with-backoff inside fetchTranslation)
+    // stay under the translation API's rate limit even when all 7 languages
+    // are selected at once.
+    const results = await runWithConcurrency(targetLanguages, 3, async (lang) => {
+      const translation = await fetchTranslation({
+        title: currentTitle,
+        excerpt: currentExcerpt,
+        content: currentContent,
+        lang
       });
-      const data = await res.json();
-      if (data.success && data.translations) {
-        setEditorData(prev => {
-          const newData = { ...prev };
-          Object.entries(data.translations).forEach(([lang, translated]) => {
-            if (newData[lang]) {
-              newData[lang] = {
-                ...newData[lang],
-                title: translated.title || '',
-                excerpt: translated.excerpt || '',
-                content: translated.content || ''
-              };
-            }
-          });
-          return newData;
-        });
-        showNotification('Translation completed successfully!', 'success');
-        setShowTranslateModal(false);
+      setTranslateProgress(prev => ({ ...prev, [lang]: 'success' }));
+      return { lang, translation };
+    });
+
+    const succeeded = [];
+    const failed = [];
+    results.forEach((result, i) => {
+      const lang = targetLanguages[i];
+      if (result.status === 'fulfilled') {
+        succeeded.push(result.value);
       } else {
-        showNotification(data.error || 'Translation failed', 'error');
+        failed.push(lang);
+        setTranslateProgress(prev => ({ ...prev, [lang]: 'error' }));
       }
-    } catch (err) {
-      console.error(err);
-      showNotification('Network error during translation', 'error');
-    } finally {
-      setTranslating(false);
+    });
+
+    if (succeeded.length > 0) {
+      setEditorData(prev => {
+        const newData = { ...prev };
+        succeeded.forEach(({ lang, translation }) => {
+          if (newData[lang]) {
+            newData[lang] = {
+              ...newData[lang],
+              title: translation.title || '',
+              excerpt: translation.excerpt || '',
+              content: translation.content || ''
+            };
+          }
+        });
+        return newData;
+      });
     }
+
+    if (failed.length === 0) {
+      showNotification('Translation completed successfully!', 'success');
+      setTimeout(() => {
+        setShowTranslateModal(false);
+        setTranslateProgress({});
+      }, 700);
+    } else if (succeeded.length > 0) {
+      showNotification(`Translated ${succeeded.length} language(s), but ${failed.join(', ')} failed.`, 'error');
+    } else {
+      showNotification('Translation failed for all selected languages.', 'error');
+    }
+
+    setTranslating(false);
   };
 
   // 1. Authenticate check on Client Component
@@ -292,12 +368,12 @@ function BlogEditorContent() {
             fr: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
             ru: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
             ja: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
-            pt: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' }
+            'pt-PT': { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' }
           };
 
           if (post.translations) {
             const postTranslations = post.translations;
-            for (const lang of ['hi', 'es', 'de', 'fr', 'ru', 'ja', 'pt']) {
+            for (const lang of ['hi', 'es', 'de', 'fr', 'ru', 'ja', 'pt-PT']) {
               if (postTranslations[lang]) {
                 const t = postTranslations[lang];
                 loadedData[lang] = {
@@ -479,37 +555,25 @@ function BlogEditorContent() {
     setTags(tags.filter((t) => t !== tagToRemove));
   };
 
-  // 5. Handle Save (Draft or Published)
-  const handleSave = async (publishStatus) => {
-    const postStatus = publishStatus || status;
-
-    // Sync active inputs of current language to editorData
-    const updatedEditorData = {
-      ...editorData,
-      [selectedLang]: {
-        title,
-        content,
-        excerpt,
-        seoTitle,
-        seoDescription
-      }
-    };
-
-    const enData = updatedEditorData.en;
+  // Builds the postData payload from a given editorData snapshot and saves
+  // it (PUT if editing, POST if new). Shared by handleSave and the
+  // delete/re-translate language actions below, so all three write the same
+  // shape of translations map instead of drifting apart.
+  const persistEditorData = async (nextEditorData, statusOverride = status) => {
+    const enData = nextEditorData.en;
 
     if (!enData.title.trim()) {
       showNotification('Please enter a title for English.', 'error');
-      return;
+      return { success: false };
     }
     if (!slug.trim()) {
       showNotification('Please enter a slug.', 'error');
-      return;
+      return { success: false };
     }
 
-    // Build translations payload
     const payloadTranslations = {};
-    for (const lang of ['hi', 'es', 'de', 'fr', 'ru', 'ja', 'pt']) {
-      const t = updatedEditorData[lang];
+    for (const lang of ['hi', 'es', 'de', 'fr', 'ru', 'ja', 'pt-PT']) {
+      const t = nextEditorData[lang];
       if (t.title.trim() || t.content.trim()) {
         payloadTranslations[lang] = {
           title: t.title,
@@ -531,7 +595,7 @@ function BlogEditorContent() {
       excerpt: enData.excerpt || enData.title,
       featuredImage,
       featuredImageAlt,
-      status: postStatus,
+      status: statusOverride,
       author,
       categories,
       tags,
@@ -557,28 +621,139 @@ function BlogEditorContent() {
 
       const res = await fetch(url, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(postData),
       });
 
       const result = await res.json();
 
       if (res.ok && result.success) {
-        setStatus(postStatus);
-        showNotification(`Post successfully saved as ${postStatus}!`);
-
-        // If it's a new post, update URL so we get the ID for further saves and Preview button
-        if (!postId && result.data && result.data._id) {
-          router.push(`/admin/editor?id=${result.data._id}`);
-        }
-      } else {
-        showNotification(result.error || 'Failed to save post.', 'error');
+        return { success: true, id: result.data?._id };
       }
+      showNotification(result.error || 'Failed to save post.', 'error');
+      return { success: false };
     } catch (err) {
       console.error(err);
       showNotification('Network error occurred while saving.', 'error');
+      return { success: false };
+    }
+  };
+
+  // 5. Handle Save (Draft or Published)
+  const handleSave = async (publishStatus) => {
+    const postStatus = publishStatus || status;
+
+    // Sync active inputs of current language to editorData
+    const updatedEditorData = {
+      ...editorData,
+      [selectedLang]: {
+        title,
+        content,
+        excerpt,
+        seoTitle,
+        seoDescription
+      }
+    };
+
+    const { success, id } = await persistEditorData(updatedEditorData, postStatus);
+    if (success) {
+      setStatus(postStatus);
+      setEditorData(updatedEditorData);
+      showNotification(`Post successfully saved as ${postStatus}!`);
+
+      // If it's a new post, update URL so we get the ID for further saves and Preview button
+      if (!postId && id) {
+        router.push(`/admin/editor?id=${id}`);
+      }
+    }
+  };
+
+  // Clears a translation's content and saves immediately, so a wrong
+  // auto-translate doesn't have to be manually blanked out field by field.
+  const handleDeleteTranslation = async (langCode) => {
+    if (!postId) {
+      showNotification('Save the post before managing translations.', 'error');
+      return;
+    }
+    const label = allLanguages.find(l => l.code === langCode)?.label || langCode;
+    if (!window.confirm(`Delete the ${label} translation? This can't be undone.`)) return;
+
+    setLangActionBusy(prev => ({ ...prev, [langCode]: 'deleting' }));
+    const nextEditorData = {
+      ...editorData,
+      [selectedLang]: { title, content, excerpt, seoTitle, seoDescription },
+      [langCode]: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' }
+    };
+
+    const { success } = await persistEditorData(nextEditorData);
+    if (success) {
+      setEditorData(nextEditorData);
+      if (selectedLang === langCode) {
+        handleLangChange('en');
+      }
+      showNotification(`${label} translation deleted.`, 'success');
+    }
+    setLangActionBusy(prev => {
+      const next = { ...prev };
+      delete next[langCode];
+      return next;
+    });
+  };
+
+  // Re-runs auto-translate for a single language (e.g. a bad first attempt)
+  // from the current English content, then saves the result immediately.
+  const handleRetranslateOne = async (langCode) => {
+    if (!postId) {
+      showNotification('Save the post before managing translations.', 'error');
+      return;
+    }
+    const label = allLanguages.find(l => l.code === langCode)?.label || langCode;
+    const enData = editorData.en;
+    const currentTitle = selectedLang === 'en' ? title : enData.title;
+    const currentExcerpt = selectedLang === 'en' ? excerpt : enData.excerpt;
+    const currentContent = selectedLang === 'en' ? content : enData.content;
+
+    if (!currentTitle.trim()) {
+      showNotification('Please provide an English title before translating.', 'error');
+      return;
+    }
+
+    setLangActionBusy(prev => ({ ...prev, [langCode]: 'retranslating' }));
+    try {
+      const translation = await fetchTranslation({ title: currentTitle, excerpt: currentExcerpt, content: currentContent, lang: langCode });
+      const nextEditorData = {
+        ...editorData,
+        [selectedLang]: { title, content, excerpt, seoTitle, seoDescription },
+        [langCode]: {
+          title: translation.title || '',
+          excerpt: translation.excerpt || '',
+          content: translation.content || '',
+          seoTitle: '',
+          seoDescription: ''
+        }
+      };
+
+      const { success } = await persistEditorData(nextEditorData);
+      if (success) {
+        setEditorData(nextEditorData);
+        if (selectedLang === langCode) {
+          setTitle(nextEditorData[langCode].title);
+          setContent(nextEditorData[langCode].content);
+          setExcerpt(nextEditorData[langCode].excerpt);
+          setSeoTitle(nextEditorData[langCode].seoTitle);
+          setSeoDescription(nextEditorData[langCode].seoDescription);
+        }
+        showNotification(`${label} translation updated.`, 'success');
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification(err.message || `Failed to re-translate ${label}.`, 'error');
+    } finally {
+      setLangActionBusy(prev => {
+        const next = { ...prev };
+        delete next[langCode];
+        return next;
+      });
     }
   };
 
@@ -1129,40 +1304,68 @@ function BlogEditorContent() {
 
       {showTranslateModal && (
         <div className="modal-overlay">
-          <div className="modal-card modal-sm">
+          <div className="modal-card modal-sm translate-modal">
             <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#1f2937' }}>Auto-Translate Post</h3>
-            <p style={{ fontSize: '0.9rem', color: '#4b5563', marginBottom: '1.5rem' }}>Select the languages you want to translate the English content to.</p>
 
-            <div className="translate-lang-grid">
-              {Object.entries({ hi: 'Hindi', es: 'Spanish', de: 'German', fr: 'French', ru: 'Russian', ja: 'Japanese', pt: 'Portuguese' }).map(([code, name]) => (
-                <label key={code} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={translateLangs[code]}
-                    onChange={e => setTranslateLangs({ ...translateLangs, [code]: e.target.checked })}
-                    style={{ width: '1.1rem', height: '1.1rem' }}
-                  />
-                  <span style={{ fontSize: '0.9rem', color: '#374151', fontWeight: 500 }}>{name}</span>
-                </label>
-              ))}
-            </div>
+            {!translating ? (
+              <>
+                <p style={{ fontSize: '0.9rem', color: '#4b5563', marginBottom: '1.5rem' }}>Select the languages you want to translate the English content to.</p>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-              <button
-                onClick={() => setShowTranslateModal(false)}
-                style={{ padding: '0.5rem 1rem', background: '#f3f4f6', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', color: '#4b5563' }}
-                disabled={translating}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleTranslateAll}
-                disabled={translating}
-                style={{ padding: '0.5rem 1rem', background: '#4f46e5', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', color: 'white', opacity: translating ? 0.7 : 1 }}
-              >
-                {translating ? 'Translating...' : 'Translate'}
-              </button>
-            </div>
+                <div className="translate-lang-grid">
+                  {Object.entries({ hi: 'Hindi', es: 'Spanish', de: 'German', fr: 'French', ru: 'Russian', ja: 'Japanese', 'pt-PT': 'Portuguese' }).map(([code, name]) => (
+                    <label key={code} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={translateLangs[code]}
+                        onChange={e => setTranslateLangs({ ...translateLangs, [code]: e.target.checked })}
+                        style={{ width: '1.1rem', height: '1.1rem' }}
+                      />
+                      <span style={{ fontSize: '0.9rem', color: '#374151', fontWeight: 500 }}>{name}</span>
+                    </label>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                  <button
+                    onClick={() => setShowTranslateModal(false)}
+                    style={{ padding: '0.5rem 1rem', background: '#f3f4f6', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', color: '#4b5563' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleTranslateAll}
+                    style={{ padding: '0.5rem 1rem', background: '#4f46e5', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', color: 'white' }}
+                  >
+                    Translate
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="translate-progress">
+                <p style={{ fontSize: '0.9rem', color: '#4b5563', marginBottom: '1.25rem' }}>Translating your post — this can take a minute for longer articles.</p>
+                <ul className="translate-progress-list">
+                  {Object.entries({ hi: 'Hindi', es: 'Spanish', de: 'German', fr: 'French', ru: 'Russian', ja: 'Japanese', 'pt-PT': 'Portuguese' })
+                    .filter(([code]) => translateLangs[code])
+                    .map(([code, name]) => {
+                      const state = translateProgress[code] || 'pending';
+                      return (
+                        <li key={code} className={`translate-progress-item ${state}`}>
+                          <span className="translate-progress-icon">
+                            {state === 'success' && (
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            )}
+                            {state === 'error' && (
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            )}
+                            {state === 'pending' && <span className="translate-spinner" />}
+                          </span>
+                          <span className="translate-progress-label">{name}</span>
+                        </li>
+                      );
+                    })}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1210,18 +1413,50 @@ function BlogEditorContent() {
                 {allLanguages.filter(l => l.group === 'Translations').map(lang => {
                   const isActive = selectedLang === lang.code;
                   const hasContent = (editorData[lang.code]?.title?.trim() || '') !== '';
+                  const busy = langActionBusy[lang.code];
                   return (
-                    <button
-                      key={lang.code}
-                      onClick={() => {
-                        handleLangChange(lang.code);
-                        setShowLangSelectModal(false);
-                      }}
-                      className={`lang-option${isActive ? ' active' : ''}`}
-                    >
-                      <span>{lang.label}</span>
-                      {hasContent && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} title="Has Content" />}
-                    </button>
+                    <div key={lang.code} className="lang-option-row">
+                      <button
+                        onClick={() => {
+                          handleLangChange(lang.code);
+                          setShowLangSelectModal(false);
+                        }}
+                        className={`lang-option${isActive ? ' active' : ''}`}
+                      >
+                        <span>{lang.label}</span>
+                        {hasContent && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} title="Has Content" />}
+                      </button>
+                      {hasContent && (
+                        <div className="lang-option-actions">
+                          <button
+                            type="button"
+                            className="lang-icon-btn"
+                            title={`Re-translate ${lang.label}`}
+                            disabled={!!busy}
+                            onClick={(e) => { e.stopPropagation(); handleRetranslateOne(lang.code); }}
+                          >
+                            {busy === 'retranslating' ? (
+                              <span className="translate-spinner small" />
+                            ) : (
+                              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            className="lang-icon-btn danger"
+                            title={`Delete ${lang.label} translation`}
+                            disabled={!!busy}
+                            onClick={(e) => { e.stopPropagation(); handleDeleteTranslation(lang.code); }}
+                          >
+                            {busy === 'deleting' ? (
+                              <span className="translate-spinner small" />
+                            ) : (
+                              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
