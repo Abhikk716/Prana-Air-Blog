@@ -7,6 +7,7 @@ import { Navigation, Pagination, Autoplay } from 'swiper/modules';
 export default function RichContent({ html }) {
   const containerRef = useRef(null);
   const swipersRef = useRef([]);
+  const faqToggleCleanupRef = useRef(null);
 
   useEffect(() => {
     // Cleanup previous swiper instances if re-rendering
@@ -104,25 +105,33 @@ export default function RichContent({ html }) {
       });
 
       // 3. FAQ Accordion Logic (Exclusive Open)
-      const faqBlocks = containerRef.current.querySelectorAll('.prana-faq-block');
-      faqBlocks.forEach(block => {
-        const detailsElements = block.querySelectorAll('details.prana-faq-item');
-        detailsElements.forEach((details) => {
-          details.addEventListener('toggle', (e) => {
-            if (details.open) {
-              detailsElements.forEach(otherDetails => {
-                if (otherDetails !== details && otherDetails.open) {
-                  otherDetails.removeAttribute('open');
-                }
-              });
-            }
-          });
+      // 'toggle' events don't bubble, so we listen on the container with
+      // capture:true instead of attaching a listener per <details>. This
+      // avoids leaking duplicate listeners across re-renders/Fast Refresh,
+      // which was causing items to flicker open-then-closed.
+      const handleFaqToggle = (e) => {
+        const details = e.target;
+        if (!(details instanceof HTMLElement) || !details.matches('details.prana-faq-item')) return;
+        if (!details.open) return;
+
+        const block = details.closest('.prana-faq-block');
+        if (!block) return;
+
+        block.querySelectorAll('details.prana-faq-item').forEach((otherDetails) => {
+          if (otherDetails !== details && otherDetails.open) {
+            otherDetails.removeAttribute('open');
+          }
         });
-      });
+      };
+      containerRef.current.addEventListener('toggle', handleFaqToggle, true);
+      faqToggleCleanupRef.current = () => {
+        containerRef.current?.removeEventListener('toggle', handleFaqToggle, true);
+      };
     }
 
     return () => {
       swipersRef.current.forEach(swiper => swiper.destroy(true, true));
+      faqToggleCleanupRef.current?.();
     };
   }, [html]);
 
