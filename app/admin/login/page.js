@@ -27,16 +27,17 @@ export default function AdminLogin() {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        // Redirect to admin dashboard
+        // Keep the loading/spinner state on until the dashboard navigation
+        // completes, otherwise the button flips back before the page changes.
         router.push('/admin/dashboard');
         router.refresh();
       } else {
         setError(data.error || 'Invalid credentials.');
+        setLoading(false);
       }
     } catch (err) {
       console.error(err);
       setError('An error occurred. Please try again.');
-    } finally {
       setLoading(false);
     }
   };
@@ -178,25 +179,50 @@ export default function AdminLogin() {
               borderRadius: '8px',
               fontWeight: 700,
               fontSize: '0.95rem',
-              cursor: 'pointer',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.75 : 1,
               boxShadow: '0 4px 10px rgba(116, 183, 92, 0.25)',
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.6rem'
             }}
             onMouseOver={(e) => {
               if (!loading) {
-                e.target.style.transform = 'translateY(-1px)';
-                e.target.style.boxShadow = '0 6px 15px rgba(116, 183, 92, 0.45)';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 6px 15px rgba(116, 183, 92, 0.45)';
               }
             }}
             onMouseOut={(e) => {
-              e.target.style.transform = 'none';
-              e.target.style.boxShadow = '0 4px 10px rgba(116, 183, 92, 0.25)';
+              e.currentTarget.style.transform = 'none';
+              e.currentTarget.style.boxShadow = '0 4px 10px rgba(116, 183, 92, 0.25)';
             }}
           >
-            {loading ? 'Logging in...' : 'Sign In'}
+            {loading && (
+              <span
+                style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid rgba(255, 255, 255, 0.4)',
+                  borderTopColor: '#ffffff',
+                  borderRadius: '50%',
+                  display: 'inline-block',
+                  animation: 'admin-login-spin 0.7s linear infinite'
+                }}
+              />
+            )}
+            {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>
       </div>
+      <style jsx>{`
+        @keyframes admin-login-spin {
+          to {
+            transform: rotate(360deg);
+          }
+        }
+      `}</style>
     </div>
   );
 }
