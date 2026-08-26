@@ -123,6 +123,10 @@ const PostSchema = new mongoose.Schema(
 
 // Add index on slug for fast queries
 PostSchema.index({ slug: 1 });
+// Lets MongoDB satisfy `.sort({ publishedAt: -1 })` from the index directly
+// instead of buffering results in memory, which now overflows the 32MB
+// in-memory sort limit given the full-content English-variant translations.
+PostSchema.index({ publishedAt: -1 });
 
 // Prevent mongoose caching old schema in Next.js dev
 if (mongoose.models.Post) {

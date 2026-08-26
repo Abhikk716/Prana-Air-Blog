@@ -24,19 +24,21 @@ const allLanguages = [
 ];
 
 // Retries a single language's translation request on a 429 (rate limited)
-// with exponential backoff before giving up on it.
-async function fetchTranslation({ title, excerpt, content, lang }, attempt = 0) {
+// with exponential backoff before giving up on it. `signal` lets the caller
+// cancel an in-flight or not-yet-started request (Cancel button).
+async function fetchTranslation({ title, excerpt, content, lang, signal }, attempt = 0) {
   const res = await fetch('/api/translate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ title, excerpt, content, targetLanguage: lang })
+    body: JSON.stringify({ title, excerpt, content, targetLanguage: lang }),
+    signal
   });
   const data = await res.json();
 
   if (res.status === 429 && attempt < 4) {
     const waitMs = 1500 * Math.pow(2, attempt); // 1.5s, 3s, 6s, 12s
     await new Promise(resolve => setTimeout(resolve, waitMs));
-    return fetchTranslation({ title, excerpt, content, lang }, attempt + 1);
+    return fetchTranslation({ title, excerpt, content, lang, signal }, attempt + 1);
   }
 
   if (!data.success) throw new Error(data.error || 'Translation failed');
@@ -111,7 +113,7 @@ function BlogEditorContent() {
     fr: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
     ru: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
     ja: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
-    pt: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+    'pt-PT': { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
     in: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
     us: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
     'en-GB': { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
@@ -217,14 +219,17 @@ function BlogEditorContent() {
   const editorRef = useRef(null);
 
   const [showTranslateModal, setShowTranslateModal] = useState(false);
-  const [showLangSelectModal, setShowLangSelectModal] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [translateLangs, setTranslateLangs] = useState({
     hi: true, es: true, de: true, fr: true, ru: true, ja: true, 'pt-PT': true
   });
   // Per-language status while a translation run is in flight, drives the
-  // progress list in the modal: 'pending' | 'success' | 'error'.
+  // progress list in the modal: 'pending' | 'success' | 'error' | 'cancelled'.
   const [translateProgress, setTranslateProgress] = useState({});
+  // Set once a run finishes (or is cancelled) so the modal can show a clear
+  // summary instead of auto-closing — the writer should see what happened.
+  const [translateResult, setTranslateResult] = useState(null);
+  const translateAbortRef = useRef(null);
   // Per-language busy state for the delete/re-translate actions in the
   // language-select modal: 'deleting' | 'retranslating' | undefined.
   const [langActionBusy, setLangActionBusy] = useState({});
@@ -246,7 +251,11 @@ function BlogEditorContent() {
       return;
     }
 
+    const controller = new AbortController();
+    translateAbortRef.current = controller;
+
     setTranslating(true);
+    setTranslateResult(null);
     const initialProgress = {};
     targetLanguages.forEach(l => { initialProgress[l] = 'pending'; });
     setTranslateProgress(initialProgress);
@@ -265,11 +274,14 @@ function BlogEditorContent() {
         title: currentTitle,
         excerpt: currentExcerpt,
         content: currentContent,
-        lang
+        lang,
+        signal: controller.signal
       });
       setTranslateProgress(prev => ({ ...prev, [lang]: 'success' }));
       return { lang, translation };
     });
+
+    const wasCancelled = controller.signal.aborted;
 
     const succeeded = [];
     const failed = [];
@@ -277,6 +289,8 @@ function BlogEditorContent() {
       const lang = targetLanguages[i];
       if (result.status === 'fulfilled') {
         succeeded.push(result.value);
+      } else if (result.reason?.name === 'AbortError') {
+        setTranslateProgress(prev => ({ ...prev, [lang]: 'cancelled' }));
       } else {
         failed.push(lang);
         setTranslateProgress(prev => ({ ...prev, [lang]: 'error' }));
@@ -300,19 +314,26 @@ function BlogEditorContent() {
       });
     }
 
-    if (failed.length === 0) {
+    setTranslating(false);
+    translateAbortRef.current = null;
+
+    if (wasCancelled) {
+      setTranslateResult({ type: 'cancelled', succeeded: succeeded.length });
+    } else if (failed.length === 0) {
+      setTranslateResult({ type: 'success', succeeded: succeeded.length });
       showNotification('Translation completed successfully!', 'success');
-      setTimeout(() => {
-        setShowTranslateModal(false);
-        setTranslateProgress({});
-      }, 700);
     } else if (succeeded.length > 0) {
+      setTranslateResult({ type: 'partial', succeeded: succeeded.length, failed });
       showNotification(`Translated ${succeeded.length} language(s), but ${failed.join(', ')} failed.`, 'error');
     } else {
+      setTranslateResult({ type: 'failed', failed });
       showNotification('Translation failed for all selected languages.', 'error');
     }
+  };
 
-    setTranslating(false);
+  // Stops any not-yet-finished translation requests in the current run.
+  const handleCancelTranslate = () => {
+    translateAbortRef.current?.abort();
   };
 
   // 1. Authenticate check on Client Component
@@ -362,6 +383,12 @@ function BlogEditorContent() {
               seoTitle: post.seo?.title || '',
               seoDescription: post.seo?.description || ''
             },
+            in: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+            us: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+            'en-GB': { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+            'en-CA': { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+            'en-AU': { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
+            sg: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
             hi: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
             es: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
             de: { title: '', content: '', excerpt: '', seoTitle: '', seoDescription: '' },
@@ -373,7 +400,7 @@ function BlogEditorContent() {
 
           if (post.translations) {
             const postTranslations = post.translations;
-            for (const lang of ['hi', 'es', 'de', 'fr', 'ru', 'ja', 'pt-PT']) {
+            for (const lang of ['in', 'us', 'en-GB', 'en-CA', 'en-AU', 'sg', 'hi', 'es', 'de', 'fr', 'ru', 'ja', 'pt-PT']) {
               if (postTranslations[lang]) {
                 const t = postTranslations[lang];
                 loadedData[lang] = {
@@ -572,7 +599,7 @@ function BlogEditorContent() {
     }
 
     const payloadTranslations = {};
-    for (const lang of ['hi', 'es', 'de', 'fr', 'ru', 'ja', 'pt-PT']) {
+    for (const lang of ['in', 'us', 'en-GB', 'en-CA', 'en-AU', 'sg', 'hi', 'es', 'de', 'fr', 'ru', 'ja', 'pt-PT']) {
       const t = nextEditorData[lang];
       if (t.title.trim() || t.content.trim()) {
         payloadTranslations[lang] = {
@@ -757,6 +784,23 @@ function BlogEditorContent() {
     }
   };
 
+  // Single source of truth for a language's status, shared by the top
+  // status strip and the "Select Language to Edit" modal so they can never
+  // disagree with each other.
+  const getLangStatus = (lang) => {
+    const isEnglishBase = lang.code === 'en';
+    const data = isEnglishBase ? { title, content } : editorData[lang.code];
+    const hasContent = (data?.title?.trim() || '') !== '';
+    const sameAsEnglish = !isEnglishBase && hasContent
+      && data.title === editorData.en.title
+      && data.content === editorData.en.content;
+
+    if (isEnglishBase) return { key: 'done', text: 'Original' };
+    if (hasContent && sameAsEnglish) return { key: 'same', text: 'Same as English' };
+    if (hasContent) return { key: 'done', text: 'Translated' };
+    return { key: 'pending', text: 'Not written' };
+  };
+
   if (!authChecked) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#94a3b8' }}>
@@ -778,7 +822,7 @@ function BlogEditorContent() {
       {/* Editor Header Navigation */}
       <div className="editor-header">
         <div className="header-title">
-          <a href="/admin/dashboard" className="header-back-link">
+          <a href="/admin/dashboard?tab=posts" className="header-back-link">
             &larr; Back to Dashboard
           </a>
           <h1>{postId ? 'Edit Blog Post' : 'Write a New Post'}</h1>
@@ -808,23 +852,74 @@ function BlogEditorContent() {
       <div className="editor-layout">
         {/* Main Work Area */}
         <div className="main-editor-pane">
-          {/* Translation Tab Bar */}
-          <div className="editor-toolbar">
-            <button
-              type="button"
-              onClick={() => setShowLangSelectModal(true)}
-              className="lang-select-btn"
-            >
-              Editing Language: {allLanguages.find(l => l.code === selectedLang)?.label || 'Global English (EN)'}
-              <span style={{ fontSize: '0.75rem', color: '#6b7280' }}>▼</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowTranslateModal(true)}
-              className="translate-btn"
-            >
-              Auto Translate
-            </button>
+          {/* Always-visible language panel — replaces the old dropdown +
+              popup. Every language is a card you click directly to switch
+              to it; no modal in the way. */}
+          <div className="lang-panel">
+            <div className="lang-panel-header">
+              <h3 className="lang-panel-title">Auto Translate &amp; Languages</h3>
+              <button
+                type="button"
+                onClick={() => { setTranslateResult(null); setTranslateProgress({}); setShowTranslateModal(true); }}
+                className="translate-btn"
+              >
+                Auto Translate
+              </button>
+            </div>
+
+            <div className="lang-panel-grid">
+              {allLanguages.map(lang => {
+                const isActive = selectedLang === lang.code;
+                const isTranslationLang = lang.group === 'Translations';
+                const hasContent = (lang.code === 'en' ? title : editorData[lang.code]?.title)?.trim() !== '';
+                const status = getLangStatus(lang);
+                const busy = langActionBusy[lang.code];
+
+                return (
+                  <div key={lang.code} className={`lang-card${isActive ? ' active' : ''}`}>
+                    <button
+                      type="button"
+                      onClick={() => handleLangChange(lang.code)}
+                      className="lang-card-main"
+                      title={lang.label}
+                    >
+                      <span className="lang-card-name">{lang.code.toUpperCase()}</span>
+                      <span className={`lang-status-badge ${status.key}`}>{status.text}</span>
+                    </button>
+                    {isTranslationLang && hasContent && (
+                      <div className="lang-card-actions">
+                        <button
+                          type="button"
+                          className="lang-icon-btn"
+                          title={`Re-translate ${lang.label}`}
+                          disabled={!!busy}
+                          onClick={(e) => { e.stopPropagation(); handleRetranslateOne(lang.code); }}
+                        >
+                          {busy === 'retranslating' ? (
+                            <span className="translate-spinner small" />
+                          ) : (
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className="lang-icon-btn danger"
+                          title={`Delete ${lang.label} translation`}
+                          disabled={!!busy}
+                          onClick={(e) => { e.stopPropagation(); handleDeleteTranslation(lang.code); }}
+                        >
+                          {busy === 'deleting' ? (
+                            <span className="translate-spinner small" />
+                          ) : (
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <div className="main-editor-card">
@@ -881,50 +976,50 @@ function BlogEditorContent() {
                   onEditorChange={handleEditorChange}
                   init={{
                     height: 660,
-                  branding: false,
-                  promotion: false,
-                  menubar: true,
-                  image_title: true,
-                  image_advtab: true,
-                  plugins: [
-                    'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
-                    'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
-                    'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'codesample'
-                  ],
-                  toolbar: 'undo redo | blocks | ' +
-                    'bold italic forecolor | alignleft aligncenter ' +
-                    'alignright alignjustify | bullist numlist outdent indent | ' +
-                    'image media table | removeformat | code | help customdesigns templates',
-                  setup: (editor) => {
-                    editor.ui.registry.addMenuButton('customdesigns', {
-                      text: 'Custom Designs',
-                      tooltip: 'Insert predefined designs',
-                      fetch: (callback) => {
-                        const items = [
-                          {
-                            type: 'menuitem',
-                            text: 'Media Slider',
-                            onAction: () => {
-                              editor.insertContent(`
+                    branding: false,
+                    promotion: false,
+                    menubar: true,
+                    image_title: true,
+                    image_advtab: true,
+                    plugins: [
+                      'advlist', 'autolink', 'lists', 'link', 'image', 'charmap', 'preview',
+                      'anchor', 'searchreplace', 'visualblocks', 'code', 'fullscreen',
+                      'insertdatetime', 'media', 'table', 'code', 'help', 'wordcount', 'codesample'
+                    ],
+                    toolbar: 'undo redo | blocks | ' +
+                      'bold italic forecolor | alignleft aligncenter ' +
+                      'alignright alignjustify | bullist numlist outdent indent | ' +
+                      'image media table | removeformat | code | help customdesigns templates',
+                    setup: (editor) => {
+                      editor.ui.registry.addMenuButton('customdesigns', {
+                        text: 'Custom Designs',
+                        tooltip: 'Insert predefined designs',
+                        fetch: (callback) => {
+                          const items = [
+                            {
+                              type: 'menuitem',
+                              text: 'Media Slider',
+                              onAction: () => {
+                                editor.insertContent(`
                                 <div class="prana-gallery-box" style="border: 2px dashed #74b75c; padding: 20px; background: #f9f9f9; border-radius: 8px; margin: 2rem 0; min-height: 100px;">
                                   <p style="text-align: center; color: #74b75c; font-weight: bold; margin-bottom: 1rem;">--- Add your slider images below this line ---</p>
                                   <p><br></p>
                                 </div><p><br></p>
                               `);
-                            }
-                          },
-                          {
-                            type: 'menuitem',
-                            text: 'Stats Block',
-                            onAction: () => {
-                              editor.insertContent('<div class="custom-stats-block" style="background-color: #FAF6ED; border-radius: 20px; padding: 3rem 2rem; display: flex; justify-content: space-around; text-align: center; margin: 3rem 0; flex-wrap: wrap; gap: 2rem;"><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">64%</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">LOWER PM2.5</div></div><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">3.2x</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">BETTER SLEEP SCORE</div></div><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">92%</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">REPORTED FEWER HEADACHES</div></div></div><p><br></p>');
-                            }
-                          },
-                          {
-                            type: 'menuitem',
-                            text: 'FAQ Block',
-                            onAction: () => {
-                              editor.insertContent(`
+                              }
+                            },
+                            {
+                              type: 'menuitem',
+                              text: 'Stats Block',
+                              onAction: () => {
+                                editor.insertContent('<div class="custom-stats-block" style="background-color: #FAF6ED; border-radius: 20px; padding: 3rem 2rem; display: flex; justify-content: space-around; text-align: center; margin: 3rem 0; flex-wrap: wrap; gap: 2rem;"><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">64%</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">LOWER PM2.5</div></div><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">3.2x</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">BETTER SLEEP SCORE</div></div><div style="flex: 1; min-width: 150px;"><div style="font-size: 3rem; font-weight: 500; color: #173828; font-family: \'Playfair Display\', Georgia, serif; margin-bottom: 0.5rem;">92%</div><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #C28E3A; letter-spacing: 1.5px;">REPORTED FEWER HEADACHES</div></div></div><p><br></p>');
+                              }
+                            },
+                            {
+                              type: 'menuitem',
+                              text: 'FAQ Block',
+                              onAction: () => {
+                                editor.insertContent(`
                                 <div class="prana-faq-block">
                                   <details class="prana-faq-item">
                                     <summary>Do I need an air purifier in every room?</summary>
@@ -946,30 +1041,30 @@ function BlogEditorContent() {
                                   </details>
                                 </div><p><br></p>
                               `);
+                              }
+                            },
+                            {
+                              type: 'menuitem',
+                              text: 'Expert Insight',
+                              onAction: () => {
+                                editor.insertContent('<div class="custom-expert-insight" style="background-color: #F1F6EC; border-radius: 20px; padding: 3rem; margin: 3rem 0;"><div style="margin-bottom: 1.5rem;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 2L11.5 8.5L18 10L11.5 11.5L10 18L8.5 11.5L2 10L8.5 8.5L10 2Z" fill="#2E5A44"/></svg></div><h3 style="font-family: \'Playfair Display\', Georgia, serif; font-size: 1.75rem; font-weight: 700; color: #111827; margin-top: 0; margin-bottom: 1.5rem;">Expert insight</h3><p style="font-size: 1.15rem; color: #4B5563; font-style: normal; margin-bottom: 2rem; line-height: 1.7;">"A purifier that runs at 35% all day will out-perform one that runs at 100% for an hour. Indoor air is a long-form problem."</p><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #6B7280; letter-spacing: 1.5px;">DR. MIRA LINDQVIST — INDOOR ENVIRONMENTS LAB, STOCKHOLM</div></div><p><br></p>');
+                              }
                             }
-                          },
-                          {
-                            type: 'menuitem',
-                            text: 'Expert Insight',
-                            onAction: () => {
-                              editor.insertContent('<div class="custom-expert-insight" style="background-color: #F1F6EC; border-radius: 20px; padding: 3rem; margin: 3rem 0;"><div style="margin-bottom: 1.5rem;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 2L11.5 8.5L18 10L11.5 11.5L10 18L8.5 11.5L2 10L8.5 8.5L10 2Z" fill="#2E5A44"/></svg></div><h3 style="font-family: \'Playfair Display\', Georgia, serif; font-size: 1.75rem; font-weight: 700; color: #111827; margin-top: 0; margin-bottom: 1.5rem;">Expert insight</h3><p style="font-size: 1.15rem; color: #4B5563; font-style: normal; margin-bottom: 2rem; line-height: 1.7;">"A purifier that runs at 35% all day will out-perform one that runs at 100% for an hour. Indoor air is a long-form problem."</p><div style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700; color: #6B7280; letter-spacing: 1.5px;">DR. MIRA LINDQVIST — INDOOR ENVIRONMENTS LAB, STOCKHOLM</div></div><p><br></p>');
-                            }
-                          }
-                        ];
-                        callback(items);
-                      }
-                    });
+                          ];
+                          callback(items);
+                        }
+                      });
 
-                    editor.ui.registry.addMenuButton('templates', {
-                      text: 'Templates',
-                      tooltip: 'Insert pre-designed post templates',
-                      fetch: (callback) => {
-                        const items = [
-                          {
-                            type: 'menuitem',
-                            text: 'Data / Research Report',
-                            onAction: () => {
-                              editor.insertContent(`
+                      editor.ui.registry.addMenuButton('templates', {
+                        text: 'Templates',
+                        tooltip: 'Insert pre-designed post templates',
+                        fetch: (callback) => {
+                          const items = [
+                            {
+                              type: 'menuitem',
+                              text: 'Data / Research Report',
+                              onAction: () => {
+                                editor.insertContent(`
                                 <h1 style="text-align: center;">City Air Quality Report: [Month Year]</h1>
                                 <p style="text-align: center; font-size: 1.2rem; color: #666;">A comprehensive look at the recent trends in PM2.5 and AQI levels.</p>
                                 <p><br></p>
@@ -995,13 +1090,13 @@ function BlogEditorContent() {
                                 <h2>Conclusion</h2>
                                 <p>Summarize the report and provide actionable advice here.</p><p><br></p>
                               `);
-                            }
-                          },
-                          {
-                            type: 'menuitem',
-                            text: 'Educational Guide',
-                            onAction: () => {
-                              editor.insertContent(`
+                              }
+                            },
+                            {
+                              type: 'menuitem',
+                              text: 'Educational Guide',
+                              onAction: () => {
+                                editor.insertContent(`
                                 <h1>The Complete Guide to [Topic: e.g., Indoor Air Pollutants]</h1>
                                 <p style="font-size: 1.2rem; color: #555;">Everything you need to know about [Topic] and how to protect yourself.</p>
                                 <hr style="border-top: 1px solid #eaeaea; margin: 2rem 0;" />
@@ -1019,13 +1114,13 @@ function BlogEditorContent() {
                                 </div>
                                 <p><br></p>
                               `);
-                            }
-                          },
-                          {
-                            type: 'menuitem',
-                            text: 'Case Study / Success Story',
-                            onAction: () => {
-                              editor.insertContent(`
+                              }
+                            },
+                            {
+                              type: 'menuitem',
+                              text: 'Case Study / Success Story',
+                              onAction: () => {
+                                editor.insertContent(`
                                 <h1>How [Client Name] Transformed Their Air Quality</h1>
                                 <p style="font-size: 1.2rem; font-style: italic;">A success story about overcoming severe indoor pollution.</p>
                                 <p><br></p>
@@ -1052,38 +1147,38 @@ function BlogEditorContent() {
                                 </blockquote>
                                 <p><br></p>
                               `);
+                              }
                             }
-                          }
-                        ];
-                        callback(items);
-                      }
-                    });
-                  },
-                  content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height: 1.6; }',
-                  images_upload_handler: async (blobInfo, progress) => {
-                    return new Promise(async (resolve, reject) => {
-                      const formData = new FormData();
-                      formData.append('file', blobInfo.blob(), blobInfo.filename());
-                      try {
-                        const res = await fetch('/api/admin/upload', {
-                          method: 'POST',
-                          body: formData,
-                        });
-                        const data = await res.json();
-                        if (res.ok && data.success) {
-                          resolve(data.url);
-                        } else {
-                          reject(data.error || 'Upload failed.');
+                          ];
+                          callback(items);
                         }
-                      } catch (err) {
-                        reject('Network error during image upload.');
-                      }
-                    });
-                  }
-                }}
-              />
+                      });
+                    },
+                    content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height: 1.6; }',
+                    images_upload_handler: async (blobInfo, progress) => {
+                      return new Promise(async (resolve, reject) => {
+                        const formData = new FormData();
+                        formData.append('file', blobInfo.blob(), blobInfo.filename());
+                        try {
+                          const res = await fetch('/api/admin/upload', {
+                            method: 'POST',
+                            body: formData,
+                          });
+                          const data = await res.json();
+                          if (res.ok && data.success) {
+                            resolve(data.url);
+                          } else {
+                            reject(data.error || 'Upload failed.');
+                          }
+                        } catch (err) {
+                          reject('Network error during image upload.');
+                        }
+                      });
+                    }
+                  }}
+                />
+              </div>
             </div>
-          </div>
           </div>
         </div>
 
@@ -1307,7 +1402,7 @@ function BlogEditorContent() {
           <div className="modal-card modal-sm translate-modal">
             <h3 style={{ marginTop: 0, marginBottom: '1rem', color: '#1f2937' }}>Auto-Translate Post</h3>
 
-            {!translating ? (
+            {!translating && !translateResult ? (
               <>
                 <p style={{ fontSize: '0.9rem', color: '#4b5563', marginBottom: '1.5rem' }}>Select the languages you want to translate the English content to.</p>
 
@@ -1342,129 +1437,69 @@ function BlogEditorContent() {
               </>
             ) : (
               <div className="translate-progress">
-                <p style={{ fontSize: '0.9rem', color: '#4b5563', marginBottom: '1.25rem' }}>Translating your post — this can take a minute for longer articles.</p>
+                {translateResult ? (
+                  <p className={`translate-result-summary ${translateResult.type}`}>
+                    {translateResult.type === 'success' && `Done — all ${translateResult.succeeded} language(s) translated successfully.`}
+                    {translateResult.type === 'partial' && `${translateResult.succeeded} language(s) translated. Failed: ${translateResult.failed.join(', ')}.`}
+                    {translateResult.type === 'failed' && 'Translation failed for all selected languages.'}
+                    {translateResult.type === 'cancelled' && `Cancelled. ${translateResult.succeeded} language(s) had already finished before you stopped it.`}
+                  </p>
+                ) : (
+                  <p style={{ fontSize: '0.9rem', color: '#4b5563', marginBottom: '1.25rem' }}>Translating your post — this can take a minute for longer articles.</p>
+                )}
                 <ul className="translate-progress-list">
                   {Object.entries({ hi: 'Hindi', es: 'Spanish', de: 'German', fr: 'French', ru: 'Russian', ja: 'Japanese', 'pt-PT': 'Portuguese' })
                     .filter(([code]) => translateLangs[code])
                     .map(([code, name]) => {
                       const state = translateProgress[code] || 'pending';
+                      const stateLabel = {
+                        success: 'Done',
+                        error: 'Failed',
+                        cancelled: 'Cancelled',
+                        pending: translating ? 'Translating…' : 'Skipped'
+                      }[state];
                       return (
                         <li key={code} className={`translate-progress-item ${state}`}>
                           <span className="translate-progress-icon">
                             {state === 'success' && (
                               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                             )}
-                            {state === 'error' && (
+                            {(state === 'error' || state === 'cancelled') && (
                               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                             )}
-                            {state === 'pending' && <span className="translate-spinner" />}
+                            {state === 'pending' && translating && <span className="translate-spinner" />}
                           </span>
                           <span className="translate-progress-label">{name}</span>
+                          <span className="translate-progress-state">{stateLabel}</span>
                         </li>
                       );
                     })}
                 </ul>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '1.25rem' }}>
+                  {translating && (
+                    <button
+                      onClick={handleCancelTranslate}
+                      style={{ padding: '0.5rem 1rem', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', color: '#dc2626' }}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                  {translateResult && (
+                    <button
+                      onClick={() => { setShowTranslateModal(false); setTranslateProgress({}); setTranslateResult(null); }}
+                      style={{ padding: '0.5rem 1rem', background: '#4f46e5', border: 'none', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', color: 'white' }}
+                    >
+                      Close
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Language Select Modal */}
-      {showLangSelectModal && (
-        <div className="modal-overlay">
-          <div className="modal-card modal-lg">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h3 style={{ margin: 0, color: '#1f2937' }}>Select Language to Edit</h3>
-              <button
-                onClick={() => setShowLangSelectModal(false)}
-                style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#6b7280' }}
-              >
-                &times;
-              </button>
-            </div>
-
-            <div style={{ marginBottom: '2rem' }}>
-              <h4 style={{ color: '#4b5563', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.5rem', marginBottom: '1rem' }}>English Variants (Original Content)</h4>
-              <div className="lang-grid">
-                {allLanguages.filter(l => l.group === 'English Variants').map(lang => {
-                  const isActive = selectedLang === lang.code;
-                  const hasContent = lang.code === 'en' ? title.trim() !== '' : (editorData[lang.code]?.title?.trim() || '') !== '';
-                  return (
-                    <button
-                      key={lang.code}
-                      onClick={() => {
-                        handleLangChange(lang.code);
-                        setShowLangSelectModal(false);
-                      }}
-                      className={`lang-option${isActive ? ' active' : ''}`}
-                    >
-                      <span>{lang.label}</span>
-                      {hasContent && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} title="Has Content" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div>
-              <h4 style={{ color: '#4b5563', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.5rem', marginBottom: '1rem' }}>Translations</h4>
-              <div className="lang-grid">
-                {allLanguages.filter(l => l.group === 'Translations').map(lang => {
-                  const isActive = selectedLang === lang.code;
-                  const hasContent = (editorData[lang.code]?.title?.trim() || '') !== '';
-                  const busy = langActionBusy[lang.code];
-                  return (
-                    <div key={lang.code} className="lang-option-row">
-                      <button
-                        onClick={() => {
-                          handleLangChange(lang.code);
-                          setShowLangSelectModal(false);
-                        }}
-                        className={`lang-option${isActive ? ' active' : ''}`}
-                      >
-                        <span>{lang.label}</span>
-                        {hasContent && <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} title="Has Content" />}
-                      </button>
-                      {hasContent && (
-                        <div className="lang-option-actions">
-                          <button
-                            type="button"
-                            className="lang-icon-btn"
-                            title={`Re-translate ${lang.label}`}
-                            disabled={!!busy}
-                            onClick={(e) => { e.stopPropagation(); handleRetranslateOne(lang.code); }}
-                          >
-                            {busy === 'retranslating' ? (
-                              <span className="translate-spinner small" />
-                            ) : (
-                              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            className="lang-icon-btn danger"
-                            title={`Delete ${lang.label} translation`}
-                            disabled={!!busy}
-                            onClick={(e) => { e.stopPropagation(); handleDeleteTranslation(lang.code); }}
-                          >
-                            {busy === 'deleting' ? (
-                              <span className="translate-spinner small" />
-                            ) : (
-                              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
-                            )}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
     </div>
   );
 }

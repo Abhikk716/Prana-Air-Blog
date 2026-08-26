@@ -284,7 +284,11 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
 
     let matchesLanguage = true;
     if (languageFilter !== 'all') {
-      matchesLanguage = post.translations && post.translations[languageFilter];
+      // 'en' (Global English) is the post's base content, not an entry
+      // under translations, so every post matches it.
+      matchesLanguage = languageFilter === 'en'
+        ? true
+        : !!(post.translations && post.translations[languageFilter]);
     }
 
     return matchesSearch && matchesStatus && matchesCategory && matchesDate && matchesLanguage;
