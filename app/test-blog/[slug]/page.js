@@ -3,10 +3,10 @@ import connectDB from '../../../lib/db';
 import Post from '../../../models/post';
 import BannerSettings from '../../../models/BannerSettings';
 import Link from 'next/link';
-import BlogImage from '../BlogImage';
+import BlogImage from '../../../components/blog/BlogImage';
 import '../blog.css';
-import TableOfContents from '../components/TableOfContents';
-import RichContent from '../components/RichContent';
+import TableOfContents from '../../../components/blog/TableOfContents';
+import RichContent from '../../../components/blog/RichContent';
 
 function translatePost(post, lang) {
   if (!lang || lang === 'en') return post;

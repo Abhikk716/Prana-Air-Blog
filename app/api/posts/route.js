@@ -11,7 +11,7 @@ const CORS_HEADERS = {
 
 function translatePost(post, lang) {
   if (!lang || lang === 'en') return post;
-  
+
   const translations = post.translations;
   if (!translations) return post;
 

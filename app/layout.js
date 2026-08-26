@@ -3,7 +3,7 @@ import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 import './globals.css';
-import HeaderNav from './components/HeaderNav';
+import HeaderNav from '../components/layout/HeaderNav';
 
 export const metadata = {
   title: 'Prana Air Blog | Air Quality & Environmental Health Insights',
