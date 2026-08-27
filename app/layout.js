@@ -1,9 +1,8 @@
-import { Suspense } from 'react';
 import 'swiper/css';
 import 'swiper/css/navigation';
 import 'swiper/css/pagination';
 import './globals.css';
-import HeaderNav from '../components/layout/HeaderNav';
+import AppShell from '../components/layout/AppShell';
 
 export const metadata = {
   title: 'Prana Air Blog | Air Quality & Environmental Health Insights',
@@ -33,32 +32,7 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <div className="app-wrapper">
-          <header className="main-header">
-            <div className="header-container">
-              <a href="/" className="logo">
-                Prana Air <span className="logo-accent">Blog</span>
-              </a>
-              <Suspense fallback={null}>
-                <HeaderNav />
-              </Suspense>
-            </div>
-          </header>
-
-          <main className="main-content">
-            {children}
-          </main>
-
-          <footer className="main-footer">
-            <div className="footer-container">
-              <div className="footer-info">
-                <h3>Prana Air</h3>
-                <p>Empowering you to breathe clean air through advanced monitoring and purification technology.</p>
-              </div>
-              <div className="footer-copyright">
-                <p>&copy; {new Date().getFullYear()} Prana Air. All rights reserved.</p>
-              </div>
-            </div>
-          </footer>
+          <AppShell>{children}</AppShell>
         </div>
       </body>
     </html>

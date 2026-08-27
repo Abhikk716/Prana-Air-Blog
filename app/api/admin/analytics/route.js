@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import connectDB from '../../../../lib/db';
 import DailyAnalytics from '../../../../models/DailyAnalytics';
 import Post from '../../../../models/post';
+import { isAdminAuthenticated } from '../../../../lib/adminAuth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    const cookieStore = await cookies();
-    const session = cookieStore.get('admin_session');
-
-    if (!session || session.value !== 'authenticated') {
+    if (!(await isAdminAuthenticated())) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function AdminLogin() {
@@ -8,7 +8,28 @@ export default function AdminLogin() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const router = useRouter();
+
+  // If there's already a valid session (e.g. you never logged out), skip
+  // straight past the login form instead of showing it and letting you
+  // re-submit into a confusing state.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/admin/check-auth')
+      .then((res) => {
+        if (cancelled) return;
+        if (res.ok) {
+          router.replace('/admin/dashboard');
+        } else {
+          setCheckingSession(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCheckingSession(false);
+      });
+    return () => { cancelled = true; };
+  }, [router]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -41,6 +62,14 @@ export default function AdminLogin() {
       setLoading(false);
     }
   };
+
+  if (checkingSession) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '70vh', color: '#94a3b8' }}>
+        <h2>Checking session...</h2>
+      </div>
+    );
+  }
 
   return (
     <div style={{

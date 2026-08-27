@@ -1,13 +1,10 @@
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { isAdminAuthenticated } from '../lib/adminAuth';
 
 export const dynamic = 'force-dynamic';
 
 export default async function BlogHome() {
-  const cookieStore = await cookies();
-  const session = cookieStore.get('admin_session');
-
-  if (session && session.value === 'authenticated') {
+  if (await isAdminAuthenticated()) {
     redirect('/admin/dashboard');
   } else {
     redirect('/admin/login');

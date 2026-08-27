@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
 import { timingSafeEqual } from 'crypto';
+import { createSessionToken } from '../../../../lib/sessionToken';
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -84,14 +85,16 @@ export async function POST(request) {
     if (usernameMatches && passwordMatches) {
       clearAttempts(ip);
 
-      // Set secure HTTP-only cookie
+      // Set secure HTTP-only cookie holding a signed, expiring session token
+      // (not a guessable static value — see lib/sessionToken.js)
+      const maxAgeSeconds = 60 * 60 * 24; // 24 hours
       const cookieStore = await cookies();
-      cookieStore.set('admin_session', 'authenticated', {
+      cookieStore.set('admin_session', createSessionToken(maxAgeSeconds * 1000), {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
         path: '/',
-        maxAge: 60 * 60 * 24, // 24 hours
+        maxAge: maxAgeSeconds,
       });
 
       return Response.json({ success: true });

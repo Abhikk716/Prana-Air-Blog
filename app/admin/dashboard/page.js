@@ -1,17 +1,14 @@
-import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import connectDB from '../../../lib/db';
 import Post from '../../../models/post';
 import DashboardClient from './DashboardClient';
+import { isAdminAuthenticated } from '../../../lib/adminAuth';
 
 export const dynamic = 'force-dynamic'; // Prevent static caching of dashboard
 
 export default async function AdminDashboard() {
   // 1. Authenticate check on Server Component
-  const cookieStore = await cookies();
-  const session = cookieStore.get('admin_session');
-
-  if (!session || session.value !== 'authenticated') {
+  if (!(await isAdminAuthenticated())) {
     redirect('/admin/login');
   }
 

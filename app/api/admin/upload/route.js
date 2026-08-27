@@ -1,14 +1,12 @@
 import { put } from '@vercel/blob';
-import { cookies } from 'next/headers';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import fs from 'fs';
+import { isAdminAuthenticated } from '../../../../lib/adminAuth';
 
 export async function POST(request) {
   // 1. Authorize session
-  const cookieStore = await cookies();
-  const session = cookieStore.get('admin_session');
-  if (!session || session.value !== 'authenticated') {
+  if (!(await isAdminAuthenticated())) {
     return Response.json({ success: false, error: 'Unauthorized access.' }, { status: 401 });
   }
 
