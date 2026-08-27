@@ -12,23 +12,42 @@ export default async function AdminDashboard() {
     redirect('/admin/login');
   }
 
-  // 2. Fetch posts from MongoDB Atlas sorted by publication date
+  // 2. Fetch posts from MongoDB Atlas sorted by publication date.
+  // The dashboard table only ever shows title/author/date/status/category
+  // and which languages a post has — never the actual article body. Pulling
+  // `content` plus every translation's full content (title/content/excerpt/
+  // seo per language) for all posts was shipping tens of MB to the browser
+  // on every dashboard load, which is what made navigation feel slow. This
+  // aggregation fetches only the fields the table needs, and reduces
+  // `translations` down to just the list of language codes present.
   await connectDB();
-  const posts = await Post.find().sort({ publishedAt: -1 });
+  const posts = await Post.aggregate([
+    { $sort: { publishedAt: -1 } },
+    {
+      $project: {
+        title: 1,
+        slug: 1,
+        author: 1,
+        status: 1,
+        categories: 1,
+        publishedAt: 1,
+        createdAt: 1,
+        promotion: 1,
+        analytics: 1,
+        translationLangs: {
+          $map: {
+            input: { $objectToArray: { $ifNull: ['$translations', {}] } },
+            as: 't',
+            in: '$$t.k'
+          }
+        }
+      }
+    }
+  ]);
   const uniqueCategories = await Post.distinct('categories');
 
-  // 3. Serialize data (convert MongoDB ObjectIds, Dates, and Map subdocuments to standard JSON types)
-  const serializedPosts = posts.map((post) => {
-    const p = post.toObject ? post.toObject({ getters: true, flattenMaps: true }) : post;
-    const plain = JSON.parse(JSON.stringify(p));
-    
-    // Ensure translations is at least an empty object if undefined
-    if (!plain.translations) {
-      plain.translations = {};
-    }
-    
-    return plain;
-  });
+  // 3. Serialize data (convert MongoDB ObjectIds/Dates to plain JSON values)
+  const serializedPosts = JSON.parse(JSON.stringify(posts));
 
   return (
     <div className="admin-dashboard-page">

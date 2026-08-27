@@ -12,6 +12,8 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   const [sortBy, setSortBy] = useState('newest');
   const [dateFilter, setDateFilter] = useState('');
   const [languageFilter, setLanguageFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const POSTS_PER_PAGE = 20;
 
   // Analytics filters & state
   const [analyticsTimeFilter, setAnalyticsTimeFilter] = useState('all');
@@ -288,7 +290,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
       // under translations, so every post matches it.
       matchesLanguage = languageFilter === 'en'
         ? true
-        : !!(post.translations && post.translations[languageFilter]);
+        : !!post.translationLangs?.includes(languageFilter);
     }
 
     return matchesSearch && matchesStatus && matchesCategory && matchesDate && matchesLanguage;
@@ -299,6 +301,20 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
     const dateB = new Date(b.publishedAt || b.createdAt);
     return sortBy === 'newest' ? dateB - dateA : dateA - dateB;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredPosts.length / POSTS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const paginatedPosts = filteredPosts.slice(
+    (safePage - 1) * POSTS_PER_PAGE,
+    safePage * POSTS_PER_PAGE
+  );
+
+  // Any filter/sort change can shrink the result set or reorder it, so jump
+  // back to page 1 instead of leaving the view stranded on a page that may
+  // no longer make sense.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, categoryFilter, dateFilter, languageFilter, sortBy]);
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -583,7 +599,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredPosts.map((post) => (
+                  {paginatedPosts.map((post) => (
                     <tr key={post._id}>
                       <td style={{ fontWeight: 600, color: '#1f2937' }}>
                         <a href={`/blog/${post.slug}`} target="_blank" style={{ color: '#1f2937', textDecoration: 'none' }}>{post.title}</a>
@@ -597,8 +613,8 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
-                          {post.translations && Object.keys(post.translations).length > 0 ? (
-                            Object.keys(post.translations).map(lang => (
+                          {post.translationLangs && post.translationLangs.length > 0 ? (
+                            post.translationLangs.map(lang => (
                               <span key={lang} className="badge-lang">
                                 {lang}
                               </span>
@@ -624,6 +640,34 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
               </div>
             )}
           </div>
+
+          {filteredPosts.length > 0 && (
+            <div className="dashboard-pagination">
+              <span className="dashboard-pagination-info">
+                Showing {(safePage - 1) * POSTS_PER_PAGE + 1}
+                –{Math.min(safePage * POSTS_PER_PAGE, filteredPosts.length)} of {filteredPosts.length}
+              </span>
+              <div className="dashboard-pagination-controls">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={safePage === 1}
+                  className="dashboard-pagination-btn"
+                >
+                  Previous
+                </button>
+                <span className="dashboard-pagination-page">Page {safePage} of {totalPages}</span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={safePage === totalPages}
+                  className="dashboard-pagination-btn"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
 
