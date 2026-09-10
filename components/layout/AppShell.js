@@ -12,7 +12,9 @@ const CHROME_LESS_ROUTES = ['/admin/login'];
 export default function AppShell({ children }) {
   const pathname = usePathname();
   const hideChrome = CHROME_LESS_ROUTES.includes(pathname);
-  const isEditor = pathname?.startsWith('/admin/editor');
+  // The editor and the dashboard both need the wide (1600px) layout: the
+  // posts table has nine columns and gets clipped in the default 1200px.
+  const isEditor = pathname?.startsWith('/admin/editor') || pathname?.startsWith('/admin/dashboard');
 
   if (hideChrome) {
     return <main className="main-content">{children}</main>;

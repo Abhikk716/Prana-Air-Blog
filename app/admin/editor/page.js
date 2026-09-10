@@ -5,6 +5,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Script from 'next/script';
 import { Editor } from '@tinymce/tinymce-react';
 import './editor.css';
+import seoAnalysis from '../../../lib/seoAnalysis';
+
+const { analyzeReadabilityAndSeo } = seoAnalysis;
 
 const allLanguages = [
   { code: 'en', label: 'Global English (EN)', short: 'EN', group: 'English Variants' },
@@ -67,617 +70,94 @@ async function runWithConcurrency(items, limit, worker) {
   return results;
 }
 
-// Counts syllables in a word for Flesch Reading Ease and Grade Level
-function countSyllables(word) {
-  if (!word) return 1;
-  word = word.toLowerCase().trim();
-  if (word.length <= 3) return 1;
-  word = word.replace(/(?:[^laeiouy]|ed|es|e)$/, '');
-  word = word.replace(/^y/, '');
-  const matches = word.match(/[aeiouy]{1,2}/g);
-  return matches ? matches.length : 1;
-}
-
-// Stop words list for search query keyword extraction
-const CANNIBALIZATION_STOP_WORDS = new Set([
-  'the', 'and', 'for', 'with', 'that', 'this', 'from', 'your', 'about', 'what',
-  'how', 'why', 'can', 'are', 'was', 'were', 'our', 'best', 'top', 'into', 'over',
-  'more', 'than', 'under', 'will', 'when', 'which', 'where', 'look', 'closer',
-  'secretly', 'quiet', 'ultimate', 'a', 'an', 'in', 'on', 'at', 'to', 'of', 'by', 'is',
-  'it', 'its', 'you', 'all', 'any', 'not', 'or', 'be', 'as', 'do', 'does', 'did', 'have',
-  'has', 'had', 'guide', 'tips', 'lessons', 'behind', 'routine', 'ranking', 'rankings',
-  'world', 'worlds', 'closer', 'technology'
+// ---- Auto-Fix All --------------------------------------------------------
+// Which audit findings (by `code`, see analyzeReadabilityAndSeo) Claude can
+// resolve, and through which endpoint action. Everything not listed here
+// (word count, featured image, canonical settings) needs a human and is
+// reported as such instead of being silently skipped.
+const AUTO_FIX_META_CODES = new Set([
+  'title_missing', 'title_short', 'title_long',
+  'desc_missing', 'desc_short', 'desc_long',
+  'slug_missing', 'slug_long',
+  'kw_title', 'kw_slug', 'kw_desc',
+  'cannibalization'
 ]);
+const AUTO_FIX_CONTENT_DIRECTIVES = {
+  kw_body: 'keyword_body',
+  kw_stuffing: 'destuff',
+  readability: 'readability',
+  sentence_length: 'readability',
+  jargon: 'readability',
+  eeat: 'eeat',
+  ymyl: 'ymyl',
+  no_h2: 'headings'
+};
+const AUTO_FIX_META_ROUNDS = 3;
 
-function extractTopicalKeywords(str) {
-  if (!str) return { words: [], phrases: [] };
-  const clean = str
-    .replace(/&amp;/g, '&')
-    .replace(/&#39;/g, "'")
-    .toLowerCase()
-    .replace(/[^a-z0-9\.\-\s]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+// Progress copy for the single-issue buttons, shown in the progress panel.
+const AI_ACTION_LABELS = {
+  suggest_keyword: 'Choosing a target keyword…',
+  fix_title: 'Rewriting the SEO title…',
+  fix_description: 'Writing the meta description…',
+  fix_slug: 'Generating the URL slug…',
+  differentiate_cannibalization: 'Finding a distinct search angle…',
+  optimize_content: 'Weaving the keyword into the article body…',
+  fix_content_keyword: 'Weaving the keyword into the article body…',
+  fix_readability: 'Simplifying sentences for readability…',
+  fix_eeat_ymyl: 'Adding citations and the YMYL disclaimer…',
+  fix_metadata: 'Fixing title, slug & description…',
+  fix_content: 'Rewriting the article body…',
+  fix_all: 'Claude is optimizing…'
+};
 
-  const tokens = clean.split(/[\s\-_]+/).filter(t => t.length >= 2);
-  const words = tokens.filter(t => t.length >= 3 && !CANNIBALIZATION_STOP_WORDS.has(t));
+const AUTO_FIX_INITIAL_STEPS = [
+  { key: 'keyword', label: 'Keyword', status: 'pending', detail: '' },
+  { key: 'body', label: 'Article body', status: 'pending', detail: '' },
+  { key: 'metadata', label: 'Title, slug & description', status: 'pending', detail: '' },
+  { key: 'verify', label: 'Re-audit', status: 'pending', detail: '' }
+];
 
-  const phrases = [];
-  for (let i = 0; i < tokens.length - 1; i++) {
-    const t1 = tokens[i];
-    const t2 = tokens[i + 1];
-    if (t1.length >= 3 && t2.length >= 3 && (!CANNIBALIZATION_STOP_WORDS.has(t1) || !CANNIBALIZATION_STOP_WORDS.has(t2))) {
-      phrases.push(`${t1} ${t2}`);
-    }
-  }
-
-  return { words: Array.from(new Set(words)), phrases: Array.from(new Set(phrases)) };
+// A cannibalization conflict whose every overlapping term is part of the
+// primary keyword can't be differentiated without dropping the keyword
+// (which the audit would then flag instead). Only a canonical tag or a
+// merge resolves that, so it's reported as manual work.
+function isConflictOnlyTheKeyword(issue, keyword) {
+  const terms = issue?.cannibalization?.overlappingKeywords || [];
+  const kw = (keyword || '').toLowerCase();
+  return kw.length > 0 && terms.length > 0 && terms.every(t => kw.includes(String(t).toLowerCase()));
 }
 
-// Computes real-time SEO score, Flesch Reading Ease score, Grade Level, and actionable checklist
-function analyzeReadabilityAndSeo({
-  title = '',
-  slug = '',
-  description = '',
-  content = '',
-  featuredImage = '',
-  featuredImageAlt = '',
-  existingPosts = [],
-  currentPostId = null,
-  canonicalUrl = '',
-  canonicalMode = 'self',
-  primaryKeyword = ''
-}) {
-  const textWithSentenceBreaks = (content || '')
-    .replace(/<\/(p|h[1-6]|li|div|tr|blockquote)>/gi, '. ')
-    .replace(/<br\s*\/?>/gi, '. ');
-  const plainText = textWithSentenceBreaks.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  const words = plainText.length > 0 ? plainText.split(/\s+/).filter(w => w.length > 0) : [];
-  const wordCount = words.length;
-
-  const sentences = plainText.length > 0 ? plainText.split(/[.!?]+/).filter(s => s.trim().length > 1) : [];
-  const sentenceCount = Math.max(1, sentences.length);
-
-  let totalSyllables = 0;
-  let complexWordCount = 0;
-  for (const w of words) {
-    const syl = countSyllables(w);
-    totalSyllables += syl;
-    if (syl >= 3) complexWordCount++;
-  }
-
-  // Flesch Reading Ease: 206.835 - 1.015 * (words / sentences) - 84.6 * (syllables / words)
-  let fleschScore = 100;
-  let gradeLevel = 5.0;
-  let wordsPerSentence = 12;
-  let complexWordPct = 0;
-  const longSentences = sentences.filter(s => s.trim().split(/\s+/).length > 22);
-
-  if (wordCount > 10) {
-    wordsPerSentence = Math.round((wordCount / sentenceCount) * 10) / 10;
-    const syllablesPerWord = totalSyllables / Math.max(1, wordCount);
-    complexWordPct = Math.round((complexWordCount / wordCount) * 100);
-    const flesch = 206.835 - (1.015 * (wordCount / sentenceCount)) - (84.6 * syllablesPerWord);
-    fleschScore = Math.max(0, Math.min(100, Math.round(flesch)));
-
-    // Flesch-Kincaid Grade Level: 0.39 * (words/sentences) + 11.8 * (syllables/words) - 15.59
-    const fkGrade = (0.39 * (wordCount / sentenceCount)) + (11.8 * syllablesPerWord) - 15.59;
-    gradeLevel = Math.max(1, Math.min(16, Math.round(fkGrade * 10) / 10));
-  }
-
-  let readabilityStatus = 'Good';
-  let readabilityColor = '#16a34a';
-  let readabilityLabel = 'Easy to Read';
-  if (fleschScore < 50) {
-    readabilityStatus = 'Difficult';
-    readabilityColor = '#ef4444';
-    readabilityLabel = 'Difficult / Academic';
-  } else if (fleschScore < 65) {
-    readabilityStatus = 'Moderate';
-    readabilityColor = '#f59e0b';
-    readabilityLabel = 'Fairly Standard';
-  } else {
-    readabilityStatus = 'Good';
-    readabilityColor = '#16a34a';
-    readabilityLabel = 'Plain English (Optimal)';
-  }
-
-  let seoScore = 0;
-  const issues = [];
-  const passed = [];
-
-  // 1. Title Length Check
-  const titleLen = (title || '').trim().length;
-  if (titleLen === 0) {
-    issues.push({
-      type: 'error',
-      title: 'Missing Post Title',
-      issue: 'The post has no title defined.',
-      solution: 'Add a clear, keyword-rich title between 40 and 60 characters.'
-    });
-  } else if (titleLen < 35) {
-    seoScore += 10;
-    issues.push({
-      type: 'warning',
-      title: 'Title is too short',
-      issue: `Title is only ${titleLen} characters (under 35 chars).`,
-      solution: 'Expand title to 40–60 characters to capture higher search intent.'
-    });
-  } else if (titleLen > 65) {
-    seoScore += 12;
-    issues.push({
-      type: 'warning',
-      title: 'Title will be truncated by Google',
-      issue: `Title is ${titleLen} characters (over 60 chars).`,
-      solution: 'Trim title to 60 characters or fewer so the full title displays without truncation.'
-    });
-  } else {
-    seoScore += 25;
-    passed.push({
-      title: 'SEO Title Length',
-      detail: `Optimal length (${titleLen} characters) within recommended 40–60 characters.`
-    });
-  }
-
-  // 2. Meta Description / Excerpt Check
-  const descLen = (description || '').trim().length;
-  if (descLen === 0) {
-    issues.push({
-      type: 'error',
-      title: 'Missing Meta Description & Excerpt',
-      issue: 'No meta description or excerpt provided.',
-      solution: 'Write a compelling summary between 120 and 160 characters.'
-    });
-  } else if (descLen < 100) {
-    seoScore += 10;
-    issues.push({
-      type: 'warning',
-      title: 'Description is too short',
-      issue: `Description is only ${descLen} characters (ideal: 120–160 chars).`,
-      solution: 'Add more descriptive details to reach at least 120 characters.'
-    });
-  } else if (descLen > 165) {
-    seoScore += 12;
-    issues.push({
-      type: 'warning',
-      title: 'Description is too long',
-      issue: `Description is ${descLen} characters (over 160 chars).`,
-      solution: 'Shorten description to under 160 characters so Google does not cut it off with an ellipsis.'
-    });
-  } else {
-    seoScore += 25;
-    passed.push({
-      title: 'Meta Description & Excerpt Length',
-      detail: `Optimal length (${descLen} characters) within 120–160 characters.`
-    });
-  }
-
-  // 3. Slug check
-  if (!slug || slug.trim().length === 0) {
-    issues.push({
-      type: 'error',
-      title: 'Missing URL Slug',
-      issue: 'No URL slug generated for this post.',
-      solution: 'Provide a lowercase, hyphen-separated slug.'
-    });
-  } else if (slug.length > 75) {
-    seoScore += 5;
-    issues.push({
-      type: 'warning',
-      title: 'URL Slug is too long',
-      issue: `Slug has ${slug.length} characters (over 75 chars).`,
-      solution: 'Keep slug concise and focused on primary target keywords.'
-    });
-  } else {
-    seoScore += 15;
-    passed.push({
-      title: 'URL Slug Structure',
-      detail: 'Clean, lowercase, and search-engine friendly.'
-    });
-  }
-
-  // 4. Content Word Count
-  if (wordCount < 300) {
-    seoScore += Math.round((wordCount / 300) * 8);
-    issues.push({
-      type: 'warning',
-      title: 'Low Word Count',
-      issue: `Article has ${wordCount} words (recommended: 600+ words).`,
-      solution: 'Add in-depth analysis, FAQs, and explanations to build topical authority.'
-    });
-  } else if (wordCount < 600) {
-    seoScore += 14;
-    passed.push({
-      title: 'Acceptable Word Count',
-      detail: `${wordCount} words. Consider expanding for competitive search terms.`
-    });
-  } else {
-    seoScore += 20;
-    passed.push({
-      title: 'Comprehensive Content Depth',
-      detail: `Great depth with ${wordCount} words, satisfying search depth.`
-    });
-  }
-
-  // 5. Headings structure
-  const hasH2 = /<h2[^>]*>/i.test(content || '');
-  const hasH3 = /<h3[^>]*>/i.test(content || '');
-  if (!hasH2 && wordCount > 200) {
-    issues.push({
-      type: 'warning',
-      title: 'Missing H2 Subheadings',
-      issue: 'No H2 subheadings found in article body.',
-      solution: 'Break content into clear sections using H2 headings for readability and ranking.'
-    });
-  } else if (hasH2) {
-    seoScore += 10;
-    passed.push({
-      title: 'Heading Hierarchy',
-      detail: `Content uses H2 ${hasH3 ? 'and H3 ' : ''}headings to organize thoughts.`
-    });
-  }
-
-  // 6. Featured Image & Alt
-  if (!featuredImage) {
-    issues.push({
-      type: 'warning',
-      title: 'Missing Featured Media',
-      issue: 'No featured image selected for article thumbnail.',
-      solution: 'Upload a high-resolution hero image with descriptive alt text.'
-    });
-  } else {
-    seoScore += 5;
-    passed.push({
-      title: 'Featured Image Set',
-      detail: 'Hero image ready for SERP rich snippet and social cards.'
-    });
-  }
-
-  // 7. Keyword Cannibalization Detection (Checked against published articles)
-  const currKeywords = extractTopicalKeywords((title || '') + ' ' + (slug || ''));
-  if (currKeywords.words.length >= 2 && Array.isArray(existingPosts) && existingPosts.length > 0) {
-    const conflicts = [];
-
-    for (const post of existingPosts) {
-      // Skip self
-      if (currentPostId && (post._id === currentPostId || post.id === currentPostId)) continue;
-      if (currentPostId && post.slug && slug && post.slug === slug) continue;
-
-      const otherKeywords = extractTopicalKeywords((post.title || '') + ' ' + (post.slug || ''));
-      const matchingWords = currKeywords.words.filter(w => otherKeywords.words.includes(w));
-      const matchingPhrases = currKeywords.phrases.filter(p => otherKeywords.phrases.includes(p));
-
-      const matchWeight = matchingWords.length + (matchingPhrases.length * 1.6);
-      const minTerms = Math.max(1, Math.min(currKeywords.words.length, otherKeywords.words.length));
-      const overlapPercent = Math.min(95, Math.round((matchWeight / (minTerms + (matchingPhrases.length > 0 ? 1 : 0))) * 100));
-
-      if (overlapPercent >= 45 || (matchingPhrases.length >= 1 && matchingWords.length >= 2) || matchingWords.length >= 3) {
-        conflicts.push({
-          id: post._id || post.id,
-          title: post.title,
-          slug: post.slug,
-          url: `https://www.pranaair.com/blog/${post.slug}`,
-          matchingKeywords: Array.from(new Set([...matchingPhrases, ...matchingWords])),
-          overlapScore: Math.max(48, overlapPercent)
-        });
-      }
-    }
-
-    if (conflicts.length > 0) {
-      conflicts.sort((a, b) => b.overlapScore - a.overlapScore);
-      const topConflict = conflicts[0];
-      const isHighRisk = topConflict.overlapScore >= 68;
-
-      // If user directed rel="canonical" to the master conflicting article, conflict is resolved per Google guidelines!
-      const isCanonicalizedToMaster = canonicalMode === 'custom' && canonicalUrl && (
-        canonicalUrl.trim().toLowerCase() === topConflict.url.toLowerCase() ||
-        canonicalUrl.trim().toLowerCase().includes(topConflict.slug.toLowerCase())
-      );
-
-      if (isCanonicalizedToMaster) {
-        seoScore += 10;
-        passed.push({
-          title: 'Cannibalization Resolved via Canonical Tag',
-          detail: `Rel="canonical" directed to master article "${topConflict.title}". Google will attribute ranking signals to the primary URL.`
-        });
-      } else {
-        seoScore = Math.max(0, seoScore - (isHighRisk ? 15 : 8));
-
-        issues.push({
-          type: isHighRisk ? 'error' : 'warning',
-          title: `Keyword Cannibalization Detected (${topConflict.overlapScore}% overlap)`,
-          isCannibalization: true,
-          cannibalization: {
-            primaryConflict: topConflict,
-            allConflicts: conflicts,
-            overlappingKeywords: topConflict.matchingKeywords,
-            targetQuery: topConflict.matchingKeywords.slice(0, 3).join(' + ')
-          },
-          issue: `Direct query overlap on [${topConflict.matchingKeywords.slice(0, 3).join(', ')}] with existing published post: "${topConflict.title}".`,
-          proof: {
-            currentQuery: title || slug,
-            conflictingTitle: topConflict.title,
-            conflictingUrl: topConflict.url,
-            overlappingTerms: topConflict.matchingKeywords,
-            overlapPercent: topConflict.overlapScore,
-            riskAnalysis: `Both articles target search intent around "${topConflict.matchingKeywords.join(' ')}". Google will split crawl priority, backlinks, and CTR between both articles.`
-          },
-          solution: `Differentiate search intent with long-tail angles, set a Canonical Tag pointing to "${topConflict.title}", or merge into the existing URL.`
-        });
-      }
-    } else {
-      seoScore += 10;
-      passed.push({
-        title: 'Zero Keyword Cannibalization (Topical Exclusivity)',
-        detail: `Verified against ${existingPosts.length} published articles. No competing titles, slugs, or shared search queries detected for "${currKeywords.words.slice(0, 4).join(', ')}".`
-      });
-    }
-  }
-
-  // 8. Canonical Tag Validation
-  const effectiveCanonical = canonicalMode === 'custom' && canonicalUrl.trim()
-    ? canonicalUrl.trim()
-    : `https://www.pranaair.com/blog/${slug || 'post-slug'}`;
-
-  if (canonicalMode === 'custom') {
-    if (!canonicalUrl.trim()) {
-      issues.push({
-        type: 'warning',
-        title: 'Empty Custom Canonical URL',
-        issue: 'Custom canonical mode is enabled but no target URL is specified.',
-        solution: 'Provide a fully qualified URL (e.g. https://www.pranaair.com/blog/master-article) or switch back to Self-Referential.'
-      });
-    } else if (!/^https?:\/\//i.test(canonicalUrl.trim())) {
-      issues.push({
-        type: 'warning',
-        title: 'Invalid Canonical URL Format',
-        issue: `Canonical URL "${canonicalUrl}" is missing https:// protocol.`,
-        solution: 'Use a complete absolute URL beginning with https://.'
-      });
-    } else {
-      seoScore += 5;
-      passed.push({
-        title: 'Custom Canonical Tag Active',
-        detail: `Consolidating indexing signals to master URL: ${canonicalUrl.trim()}`
-      });
-    }
-  } else {
-    seoScore += 5;
-    passed.push({
-      title: 'Valid Self-Referential Canonical Tag',
-      detail: `Default rel="canonical" tag correctly points to this post (${effectiveCanonical}).`
-    });
-  }
-
-  // Readability checks with detailed diagnostic metrics
-  if (wordCount > 30) {
-    if (fleschScore < 55) {
-      issues.push({
-        type: 'warning',
-        title: 'Complex Reading Level',
-        issue: `Readability score is ${fleschScore}/100 (Grade ${gradeLevel} - Difficult/Academic). Most online readers disengage on content above Grade 8.`,
-        solution: 'Aim for Grade 7–8 level (Flesch 65–75+). Break down sentences into 12–16 words and replace dense academic jargon with conversational English.'
-      });
-    }
-
-    if (wordsPerSentence > 18 || longSentences.length > 3) {
-      issues.push({
-        type: 'warning',
-        title: 'Average Sentence Length Too High',
-        issue: `Average sentence length is ${wordsPerSentence} words (optimal is 12–16 words). Found ${longSentences.length} sentences exceeding 22 words.`,
-        solution: 'Split compound sentences joined by "and", "which", "because", or semicolons into 2 shorter, punchy sentences.'
-      });
-    }
-
-    if (complexWordPct > 15) {
-      issues.push({
-        type: 'warning',
-        title: 'High Jargon & Multi-Syllable Density',
-        issue: `${complexWordPct}% of words contain 3 or more syllables, increasing cognitive reading friction.`,
-        solution: 'Substitute complex multi-syllable terms with direct plain English equivalents (e.g. "accumulate" → "build up", "concentrations" → "levels", "utilize" → "use").'
-      });
-    }
-
-    if (fleschScore >= 55 && wordsPerSentence <= 18 && complexWordPct <= 15) {
-      passed.push({
-        title: 'Content Readability & Sentence Flow',
-        detail: `Flesch Reading Ease ${fleschScore}/100 (Grade ${gradeLevel}), avg ${wordsPerSentence} words/sentence, accessible to general readers.`
-      });
-    }
-  }
-
-  // 9. Primary Target Keyword Evaluation & SEO Score Impact
-  const cleanKw = (primaryKeyword || '').trim().toLowerCase();
-  let keywordInTitle = false;
-  let keywordInSlug = false;
-  let keywordInDesc = false;
-  let keywordMatches = 0;
-  let keywordDensity = 0;
-
-  if (cleanKw) {
-    const titleLower = (title || '').toLowerCase();
-    const descLower = (description || '').toLowerCase();
-    const slugLower = (slug || '').toLowerCase();
-    const slugKw = cleanKw.replace(/\s+/g, '-');
-
-    // A. Check Keyword in SEO Title (up to 12 pts)
-    keywordInTitle = titleLower.includes(cleanKw);
-    if (keywordInTitle) {
-      const isFrontLoaded = titleLower.indexOf(cleanKw) < 25;
-      seoScore += isFrontLoaded ? 12 : 8;
-      passed.push({
-        title: 'Target Keyword in Title',
-        detail: `Primary keyword "${primaryKeyword}" found in SEO Title${isFrontLoaded ? ' (front-loaded)' : ''}.`
-      });
-    } else {
-      issues.push({
-        type: 'warning',
-        title: 'Target Keyword Missing from Title',
-        issue: `Target keyword "${primaryKeyword}" was not found in the SEO Title.`,
-        solution: `Place "${primaryKeyword}" near the beginning of your SEO title.`
-      });
-    }
-
-    // B. Check Keyword in URL Slug (up to 8 pts)
-    const kwWords = cleanKw.split(/\s+/).filter(w => w.length > 2);
-    keywordInSlug = slugLower.includes(slugKw) || (kwWords.length > 0 && kwWords.every(w => slugLower.includes(w)));
-    if (keywordInSlug) {
-      seoScore += 8;
-      passed.push({
-        title: 'Target Keyword in URL Slug',
-        detail: `URL slug contains "${primaryKeyword}".`
-      });
-    } else {
-      issues.push({
-        type: 'warning',
-        title: 'Target Keyword Missing from Slug',
-        issue: `Target keyword "${primaryKeyword}" is missing from the URL slug.`,
-        solution: `Include "${slugKw}" in the slug for stronger keyword relevance.`
-      });
-    }
-
-    // C. Check Keyword in Meta Description (up to 8 pts)
-    keywordInDesc = descLower.includes(cleanKw);
-    if (keywordInDesc) {
-      seoScore += 8;
-      passed.push({
-        title: 'Target Keyword in Meta Description',
-        detail: `Primary keyword "${primaryKeyword}" appears in the search snippet.`
-      });
-    } else {
-      issues.push({
-        type: 'warning',
-        title: 'Target Keyword Missing from Description',
-        issue: `Target keyword "${primaryKeyword}" is missing from the meta description.`,
-        solution: `Include "${primaryKeyword}" naturally in your meta description snippet.`
-      });
-    }
-
-    // D. Check Keyword Density in Content Body (up to 8 pts)
-    try {
-      const kwRegex = new RegExp('\\b' + cleanKw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi');
-      const matches = plainText.match(kwRegex) || [];
-      keywordMatches = matches.length;
-      keywordDensity = wordCount > 0 ? Math.round((keywordMatches / wordCount) * 1000) / 10 : 0;
-    } catch {
-      keywordMatches = 0;
-      keywordDensity = 0;
-    }
-
-    if (keywordMatches === 0 && wordCount > 50) {
-      issues.push({
-        type: 'warning',
-        title: 'Target Keyword Missing from Article Body',
-        issue: `Target keyword "${primaryKeyword}" does not appear anywhere in the article text.`,
-        solution: `Mention "${primaryKeyword}" naturally in your article body and introduction.`
-      });
-    } else if (keywordDensity > 2.3) {
-      issues.push({
-        type: 'error',
-        title: 'Keyword Stuffing Detected (Over-Optimization)',
-        issue: `Keyword density is ${keywordDensity}% (${keywordMatches} times). Google algorithms flag repetition above 2.2% as unnatural keyword stuffing.`,
-        solution: 'Replace repetitive keyword occurrences with Latent Semantic Indexing (LSI) synonyms (e.g. synthetic fibers, airborne plastic particulate). Aim for 0.8%–1.8% density.'
-      });
-    } else if (wordCount > 50) {
-      seoScore += 8;
-      passed.push({
-        title: 'Optimal Keyword Density (No Stuffing)',
-        detail: `Found ${keywordMatches} times (${keywordDensity}% density, ideal range 0.4%–2.0%).`
-      });
-    }
-  } else {
-    issues.push({
-      type: 'warning',
-      title: 'No Target Keyword Defined',
-      issue: 'No primary target keyword has been set for this article.',
-      solution: 'Specify a primary target keyword above or click "✨ AI Suggest" to benchmark on-page SEO targeting.'
-    });
-  }
-
-  // 10. Google E-E-A-T (Experience, Expertise, Authoritativeness, Trustworthiness)
-  const eeatPatterns = [
-    /\b(WHO|World Health Organization)\b/i,
-    /\b(EPA|Environmental Protection Agency)\b/i,
-    /\b(CDC|NIH|PubMed|Lancet|Nature|ScienceDirect|UNEP)\b/i,
-    /\b(peer-reviewed|journal|study published|clinical trial|researchers at)\b/i,
-    /https?:\/\/[^\s"']+\.(gov|edu|org|who\.int|nih\.gov|epa\.gov)/i
-  ];
-  const matchedEeat = eeatPatterns.filter(p => p.test(content || ''));
-  const hasEeatCitations = matchedEeat.length >= 1;
-
-  if (wordCount > 150) {
-    if (hasEeatCitations) {
-      seoScore += 6;
-      passed.push({
-        title: 'Google E-E-A-T Scientific Attribution',
-        detail: 'Content references recognized scientific research or environmental health institutions, reinforcing Google E-E-A-T trust signals.'
-      });
-    } else {
-      issues.push({
-        type: 'warning',
-        title: 'E-E-A-T Gap: Missing Scientific Citations',
-        issue: 'Article discusses environmental & air quality claims without citing authoritative research or standards (e.g., WHO, EPA, Lancet, or peer-reviewed studies).',
-        solution: 'Cite peer-reviewed studies, official WHO/EPA air quality thresholds, or institutional measurements to strengthen Google E-E-A-T.'
-      });
-    }
-  }
-
-  // 11. Google YMYL (Your Money or Your Life) Health & Safety Compliance
-  const ymylHealthPattern = /\b(health|respiratory|lungs?|cancer|blood|toxic(ity)?|cardiovascular|disease|asthma|inhalation|pulmonary|tissue)\b/i;
-  const discussesHealth = ymylHealthPattern.test(plainText);
-  const disclaimerPattern = /\b(disclaimer|educational purposes|consult a (doctor|physician|medical|healthcare)|not (intended as|a substitute for) medical advice)\b/i;
-  const hasYmylDisclaimer = disclaimerPattern.test(plainText);
-
-  if (discussesHealth && wordCount > 200) {
-    if (hasYmylDisclaimer) {
-      seoScore += 6;
-      passed.push({
-        title: 'Google YMYL Health Disclaimer Present',
-        detail: 'Includes a clear educational & informational disclaimer for environmental health topics, complying with Google YMYL quality standards.'
-      });
-    } else {
-      issues.push({
-        type: 'warning',
-        title: 'YMYL Compliance: Health & Medical Disclaimer Missing',
-        issue: 'Content discusses health, pulmonary, or toxicity impacts. Google YMYL guidelines require clear disclaimers stating content is for educational purposes and not clinical medical advice.',
-        solution: 'Add an informational/health disclaimer box at the bottom of the article to meet Google YMYL criteria.'
-      });
-    }
-  }
-
-  seoScore = Math.min(100, Math.max(0, Math.round(seoScore)));
-
-  let seoColor = '#ef4444';
-  let seoStatus = 'Poor';
-  if (seoScore >= 80) {
-    seoColor = '#16a34a';
-    seoStatus = 'Good';
-  } else if (seoScore >= 50) {
-    seoColor = '#f59e0b';
-    seoStatus = 'Needs Work';
-  }
-
-  return {
-    seoScore,
-    seoColor,
-    seoStatus,
-    fleschScore,
-    gradeLevel,
-    readabilityStatus,
-    readabilityColor,
-    readabilityLabel,
-    wordCount,
-    sentenceCount,
-    issues,
-    passed,
-    keywordInTitle,
-    keywordInSlug,
-    keywordInDesc,
-    keywordMatches,
-    keywordDensity,
-    primaryKeyword
-  };
+function isAutoFixable(issue, keyword) {
+  if (!issue) return false;
+  if (issue.code === 'no_keyword') return true;
+  if (AUTO_FIX_CONTENT_DIRECTIVES[issue.code]) return true;
+  if (issue.code === 'cannibalization') return !isConflictOnlyTheKeyword(issue, keyword);
+  return AUTO_FIX_META_CODES.has(issue.code);
 }
+
+const formatDateTime = (value) => {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+};
+
+// "Edited" means saved again after it was published (or, for a draft, after
+// it was first created). Mongoose bumps updatedAt on the publish save too,
+// so allow a minute of slack before calling that an edit.
+const wasEditedAfterPublish = ({ createdAt, publishedAt, updatedAt }) => {
+  if (!updatedAt) return false;
+  const baseline = new Date(publishedAt || createdAt || 0).getTime();
+  return new Date(updatedAt).getTime() - baseline > 60 * 1000;
+};
+
+// Competing-post titles come straight from the database and can carry
+// WordPress entities ("&amp;"); decode the common ones for display.
+const decodeEntitiesForDisplay = (text) => (text || '')
+  .replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&#8217;|&rsquo;/g, '’')
+  .replace(/&#8216;|&lsquo;/g, '‘').replace(/&#8211;|&ndash;/g, '–').replace(/&#8212;|&mdash;/g, '—');
+
+const listIssueTitles = (issues) => issues.map(i => i.title.replace(/\s*\(.*?\)\s*$/, '')).join(', ');
 
 function BlogEditorContent() {
   const router = useRouter();
@@ -695,8 +175,20 @@ function BlogEditorContent() {
   const [excerpt, setExcerpt] = useState('');
   const [featuredImage, setFeaturedImage] = useState('');
   const [featuredImageAlt, setFeaturedImageAlt] = useState('');
+  const [savedFeaturedImageAlt, setSavedFeaturedImageAlt] = useState('');
+  const [altSaveState, setAltSaveState] = useState('idle'); // idle | saving | saved
+  const [altLookupLoading, setAltLookupLoading] = useState(false);
+  const featuredImageAltRef = useRef('');
+  useEffect(() => {
+    featuredImageAltRef.current = featuredImageAlt;
+  }, [featuredImageAlt]);
+  const [altHint, setAltHint] = useState(''); // shown under the field after a lookup prefill
   const [status, setStatus] = useState('draft');
   const [author, setAuthor] = useState('Admin');
+  // Locked by default so the byline isn't changed by accident; same
+  // unlock-to-edit pattern as the URL slug.
+  const [isAuthorLocked, setIsAuthorLocked] = useState(true);
+  const [postDates, setPostDates] = useState({ createdAt: null, publishedAt: null, updatedAt: null });
 
   // Tag and Category state
   const [categories, setCategories] = useState([]);
@@ -725,6 +217,8 @@ function BlogEditorContent() {
     }
   };
 
+  const altIsDirty = featuredImageAlt.trim() !== savedFeaturedImageAlt.trim();
+
   const effectiveCanonicalUrl = canonicalMode === 'custom' && canonicalUrl.trim()
     ? canonicalUrl.trim()
     : `https://www.pranaair.com/blog/${slug || 'post-slug'}`;
@@ -739,6 +233,13 @@ function BlogEditorContent() {
   const [promoEndDate, setPromoEndDate] = useState('');
   const [promoActive, setPromoActive] = useState(false);
   const [aiLoading, setAiLoading] = useState('');
+  const [aiProgress, setAiProgress] = useState('');
+  const [aiSteps, setAiSteps] = useState([]);          // Auto-Fix pipeline tracker
+  const [aiStepsShown, setAiStepsShown] = useState(false); // keeps the tracker up briefly after finishing
+  const aiStepsHideTimer = useRef(null);
+  useEffect(() => () => {
+    if (aiStepsHideTimer.current) clearTimeout(aiStepsHideTimer.current);
+  }, []);
 
   // Multilingual states
   const [selectedLang, setSelectedLang] = useState('en');
@@ -879,6 +380,35 @@ function BlogEditorContent() {
   const [quillLoaded, setQuillLoaded] = useState(false);
 
   const editorRef = useRef(null);
+
+  // The site header is sticky; pin the language strip + title row directly
+  // beneath it, and TinyMCE's own sticky toolbar directly beneath those.
+  // Heights vary with viewport/font, so measure them (the title block is
+  // only pinned above 768px — see .editor-sticky-top).
+  const getEditorStickyOffset = () => {
+    if (typeof document === 'undefined') return 197;
+    const header = document.querySelector('.main-header');
+    const block = document.querySelector('.editor-sticky-top');
+    const headerH = header ? Math.round(header.getBoundingClientRect().height) : 73;
+    const blockH = block && window.innerWidth > 768 ? Math.round(block.getBoundingClientRect().height) : 0;
+    return headerH + blockH;
+  };
+
+  useEffect(() => {
+    const apply = () => {
+      const header = document.querySelector('.main-header');
+      const h = header ? Math.round(header.getBoundingClientRect().height) : 72;
+      document.documentElement.style.setProperty('--editor-sticky-top', `${h}px`);
+      // TinyMCE reads this option lazily on each docking pass, so a live
+      // update keeps the toolbar snug under the title block after resizes.
+      try {
+        editorRef.current?.options?.set('toolbar_sticky_offset', getEditorStickyOffset());
+      } catch { /* editor not ready yet */ }
+    };
+    apply();
+    window.addEventListener('resize', apply);
+    return () => window.removeEventListener('resize', apply);
+  }, []);
 
   const [showTranslateModal, setShowTranslateModal] = useState(false);
   const [translating, setTranslating] = useState(false);
@@ -1086,20 +616,39 @@ function BlogEditorContent() {
             }
           }
 
-          setEditorData(loadedData);
+          // `?lang=` (from the dashboard's language filter) opens straight on
+          // that translation; anything unknown falls back to Global English.
+          // Empty English variants pre-fill from Global English, exactly as
+          // switching tabs by hand does.
+          const requestedLang = searchParams.get('lang');
+          const initialLang = allLanguages.some(l => l.code === requestedLang) ? requestedLang : 'en';
+          let initial = loadedData[initialLang] || loadedData.en;
+          if (['in', 'us', 'en-GB', 'en-CA', 'en-AU', 'sg'].includes(initialLang) && !initial.title && !initial.content) {
+            initial = { ...loadedData.en };
+            loadedData[initialLang] = initial;
+          }
 
-          // Populate active inputs with English
-          setTitle(loadedData.en.title);
-          setContent(loadedData.en.content);
-          setExcerpt(loadedData.en.excerpt);
-          setSeoTitle(loadedData.en.seoTitle);
-          setSeoDescription(loadedData.en.seoDescription);
+          setEditorData(loadedData);
+          setSelectedLang(initialLang);
+
+          setTitle(initial.title);
+          setContent(initial.content);
+          setExcerpt(initial.excerpt);
+          setSeoTitle(initial.seoTitle);
+          setSeoDescription(initial.seoDescription);
 
           setSlug(post.slug || '');
           setFeaturedImage(post.featuredImage || '');
           setFeaturedImageAlt(post.featuredImageAlt || '');
+          setSavedFeaturedImageAlt(post.featuredImageAlt || '');
+          setAltHint('');
           setStatus(post.status || 'draft');
           setAuthor(post.author || 'Admin');
+          setPostDates({
+            createdAt: post.createdAt || null,
+            publishedAt: post.publishedAt || null,
+            updatedAt: post.updatedAt || null
+          });
           setCategories(post.categories || []);
           setTags(post.tags || []);
 
@@ -1153,46 +702,105 @@ function BlogEditorContent() {
     }
   }, [title, isSlugLocked, postId]);
 
-  const showNotification = (message, type = 'success') => {
+  const showNotification = (message, type = 'success', durationMs = 4000) => {
     setNotification({ show: true, message, type });
     setTimeout(() => {
       setNotification({ show: false, message: '', type: '' });
-    }, 4000);
+    }, durationMs);
+  };
+
+  // Shared POST to the SEO endpoint. `overrides` lets the Auto-Fix pipeline
+  // send its in-progress draft instead of React state, which is still stale
+  // mid-pipeline because setState hasn't flushed between steps.
+  const requestAiFix = async (actionType, overrides = {}) => {
+    const res = await fetch('/api/ai/fix-seo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: actionType,
+        title: seoTitle || title,
+        slug,
+        description: seoDescription || excerpt,
+        content: content || '',
+        language: selectedLang,
+        primaryKeyword: primaryKeyword.trim(),
+        competingArticle: cannibalizationIssue?.cannibalization?.primaryConflict || null,
+        overlappingKeywords: cannibalizationIssue?.cannibalization?.overlappingKeywords || [],
+        needsReadabilityFix: seoMetrics.fleschScore < 55,
+        ...overrides
+      })
+    });
+
+    let data;
+    try {
+      data = await res.json();
+    } catch (parseErr) {
+      throw new Error('Server response was not valid JSON. Please try again.');
+    }
+
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Claude AI optimization failed.');
+    }
+
+    return data.data || data;
+  };
+
+  // Writes whichever of title/slug/description/content Claude returned into
+  // editor state and the per-language store for the active language tab.
+  const applyAiResult = (result) => {
+    if (result.title) {
+      setTitle(result.title);
+      setSeoTitle(result.title);
+      setEditorData(prev => ({
+        ...prev,
+        [selectedLang]: {
+          ...prev[selectedLang],
+          title: result.title,
+          seoTitle: result.title
+        }
+      }));
+    }
+
+    if (result.slug) {
+      setSlug(result.slug);
+      setIsSlugLocked(false);
+    }
+
+    if (result.description) {
+      setExcerpt(result.description);
+      setSeoDescription(result.description);
+      setEditorData(prev => ({
+        ...prev,
+        [selectedLang]: {
+          ...prev[selectedLang],
+          excerpt: result.description,
+          seoDescription: result.description
+        }
+      }));
+    }
+
+    if (result.content) {
+      setContent(result.content);
+      if (editorRef.current) {
+        editorRef.current.setContent(result.content);
+      }
+      setEditorData(prev => ({
+        ...prev,
+        [selectedLang]: {
+          ...prev[selectedLang],
+          content: result.content
+        }
+      }));
+    }
   };
 
   const handleAiFixSeo = async (actionType, customInstruction = '') => {
     setAiLoading(actionType);
+    if (aiStepsHideTimer.current) clearTimeout(aiStepsHideTimer.current);
+    setAiSteps([]);
+    setAiStepsShown(false);
     try {
-      const res = await fetch('/api/ai/fix-seo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: actionType,
-          title: seoTitle || title,
-          slug,
-          description: seoDescription || excerpt,
-          content: content || '',
-          language: selectedLang,
-          primaryKeyword: primaryKeyword.trim(),
-          competingArticle: cannibalizationIssue?.cannibalization?.primaryConflict || null,
-          overlappingKeywords: cannibalizationIssue?.cannibalization?.overlappingKeywords || [],
-          needsReadabilityFix: seoMetrics.fleschScore < 55,
-          instruction: customInstruction
-        })
-      });
-
-      let data;
-      try {
-        data = await res.json();
-      } catch (parseErr) {
-        throw new Error('Server response was not valid JSON. Please try again.');
-      }
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Claude AI optimization failed.');
-      }
-
-      const result = data.data || data;
+      const result = await requestAiFix(actionType, { instruction: customInstruction });
 
       if (actionType === 'suggest_keyword' && (result.primaryKeyword || result.keyword)) {
         const suggestedKw = (result.primaryKeyword || result.keyword).trim();
@@ -1205,50 +813,7 @@ function BlogEditorContent() {
         setPrimaryKeyword(result.primaryKeyword.trim());
       }
 
-      if (result.title) {
-        setTitle(result.title);
-        setSeoTitle(result.title);
-        setEditorData(prev => ({
-          ...prev,
-          [selectedLang]: {
-            ...prev[selectedLang],
-            title: result.title,
-            seoTitle: result.title
-          }
-        }));
-      }
-
-      if (result.slug) {
-        setSlug(result.slug);
-        setIsSlugLocked(false);
-      }
-
-      if (result.description) {
-        setExcerpt(result.description);
-        setSeoDescription(result.description);
-        setEditorData(prev => ({
-          ...prev,
-          [selectedLang]: {
-            ...prev[selectedLang],
-            excerpt: result.description,
-            seoDescription: result.description
-          }
-        }));
-      }
-
-      if (result.content) {
-        setContent(result.content);
-        if (editorRef.current) {
-          editorRef.current.setContent(result.content);
-        }
-        setEditorData(prev => ({
-          ...prev,
-          [selectedLang]: {
-            ...prev[selectedLang],
-            content: result.content
-          }
-        }));
-      }
+      applyAiResult(result);
 
       if (actionType === 'differentiate_cannibalization') {
         showNotification(`Claude differentiated topic: ${result.differentiatedAngle || 'New angle applied! Overlap eliminated.'}`, 'success');
@@ -1275,6 +840,178 @@ function BlogEditorContent() {
     }
   };
 
+  // "Auto-Fix All": instead of one giant prompt that returns title, slug,
+  // description AND the whole article in a single JSON blob (which truncated
+  // on long posts and was never checked against the audit), run a short
+  // pipeline and re-run the real audit between steps:
+  //   1. pick a target keyword if none is set (everything else hangs off it)
+  //   2. rewrite the body once, with only the directives the audit flagged
+  //   3. fix title/slug/description, re-audit, and feed any remaining
+  //      failures back to Claude for up to AUTO_FIX_META_ROUNDS rounds
+  //   4. report exactly what was fixed, what couldn't be, and what's manual
+  const setStep = (key, status, detail = '') => {
+    setAiSteps(prev => prev.map(step => (step.key === key ? { ...step, status, detail } : step)));
+  };
+
+  const handleAutoFixAll = async () => {
+    setAiLoading('fix_all');
+    setAiProgress('Analyzing audit…');
+    if (aiStepsHideTimer.current) clearTimeout(aiStepsHideTimer.current);
+    setAiSteps(AUTO_FIX_INITIAL_STEPS.map(step => ({ ...step })));
+    setAiStepsShown(true);
+
+    // Working copy: the audit is re-run against this, not React state.
+    const draft = {
+      title: seoTitle || title,
+      slug,
+      description: seoDescription || excerpt,
+      content: content || '',
+      primaryKeyword: primaryKeyword.trim()
+    };
+    const audit = () => analyzeReadabilityAndSeo({
+      ...draft,
+      featuredImage,
+      featuredImageAlt,
+      existingPosts,
+      currentPostId: postId,
+      canonicalUrl,
+      canonicalMode
+    });
+    const failures = [];
+
+    try {
+      let metrics = audit();
+      const startIssues = metrics.issues;
+
+      if (!startIssues.some(i => isAutoFixable(i, draft.primaryKeyword))) {
+        setAiSteps([]);
+        setAiStepsShown(false);
+        if (startIssues.length === 0) {
+          showNotification('No SEO issues to fix. 🎉', 'success');
+        } else {
+          showNotification(`Nothing Claude can fix automatically. Needs manual action: ${listIssueTitles(startIssues)}.`, 'error', 8000);
+        }
+        return;
+      }
+
+      // 1. Keyword
+      if (!draft.primaryKeyword) {
+        setAiProgress('Choosing a target keyword…');
+        setStep('keyword', 'active');
+        try {
+          const r = await requestAiFix('suggest_keyword', { ...draft });
+          const kw = (r.primaryKeyword || r.keyword || '').trim();
+          if (kw) {
+            draft.primaryKeyword = kw;
+            setPrimaryKeyword(kw);
+            metrics = audit();
+          }
+          setStep('keyword', kw ? 'done' : 'failed', kw ? `"${kw}"` : 'no suggestion');
+        } catch (err) {
+          failures.push(`keyword suggestion (${err.message})`);
+          setStep('keyword', 'failed');
+        }
+      } else {
+        setStep('keyword', 'skipped', 'already set');
+      }
+
+      // 2. Article body, one pass
+      const directives = Array.from(new Set(
+        metrics.issues.map(i => AUTO_FIX_CONTENT_DIRECTIVES[i.code]).filter(Boolean)
+      ));
+      if (directives.length > 0) {
+        setAiProgress('Rewriting article body…');
+        setStep('body', 'active', `${directives.length} fix${directives.length === 1 ? '' : 'es'}`);
+        try {
+          const r = await requestAiFix('fix_content', { ...draft, directives });
+          if (r.content) {
+            draft.content = r.content;
+            applyAiResult({ content: r.content });
+            metrics = audit();
+          }
+          setStep('body', 'done');
+        } catch (err) {
+          failures.push(`article body (${err.message})`);
+          setStep('body', 'failed');
+        }
+      } else {
+        setStep('body', 'skipped', 'nothing flagged');
+      }
+
+      // 3. Metadata, verified against the audit and retried with feedback
+      let metaRan = false;
+      let metaFailed = false;
+      for (let round = 1; round <= AUTO_FIX_META_ROUNDS; round++) {
+        const metaIssues = metrics.issues.filter(i =>
+          AUTO_FIX_META_CODES.has(i.code) &&
+          !(i.code === 'cannibalization' && isConflictOnlyTheKeyword(i, draft.primaryKeyword))
+        );
+        if (metaIssues.length === 0) break;
+
+        metaRan = true;
+        setAiProgress(round === 1
+          ? 'Fixing title, slug & description…'
+          : `Re-checking metadata (attempt ${round}/${AUTO_FIX_META_ROUNDS})…`);
+        setStep('metadata', 'active', `round ${round}/${AUTO_FIX_META_ROUNDS}`);
+
+        const conflict = metaIssues.find(i => i.isCannibalization)?.cannibalization;
+        try {
+          const r = await requestAiFix('fix_metadata', {
+            ...draft,
+            competingArticle: conflict?.primaryConflict || null,
+            overlappingKeywords: conflict?.overlappingKeywords || [],
+            feedback: metaIssues.map(i => `${i.title}: ${i.issue}`)
+          });
+          if (r.title) draft.title = r.title;
+          if (r.slug) draft.slug = r.slug;
+          if (r.description) draft.description = r.description;
+          applyAiResult(r);
+          metrics = audit();
+        } catch (err) {
+          failures.push(`metadata (${err.message})`);
+          metaFailed = true;
+          break;
+        }
+      }
+      if (!metaRan) {
+        setStep('metadata', 'skipped', 'nothing flagged');
+      } else if (metaFailed) {
+        setStep('metadata', 'failed');
+      } else {
+        setStep('metadata', 'done');
+      }
+
+      // 4. Report
+      setAiProgress('Re-checking the audit…');
+      const endCodes = new Set(metrics.issues.map(i => i.code));
+      const fixed = startIssues.filter(i => !endCodes.has(i.code));
+      const remaining = metrics.issues;
+      const stillAuto = remaining.filter(i => isAutoFixable(i, draft.primaryKeyword));
+      const manual = remaining.filter(i => !isAutoFixable(i, draft.primaryKeyword));
+
+      setStep('verify', 'done', `${fixed.length}/${startIssues.length} fixed`);
+
+      const parts = [`Auto-Fix resolved ${fixed.length} of ${startIssues.length} issue${startIssues.length === 1 ? '' : 's'}.`];
+      if (failures.length) parts.push(`Failed: ${failures.join('; ')}.`);
+      if (stillAuto.length) parts.push(`Still flagged after ${AUTO_FIX_META_ROUNDS} tries: ${listIssueTitles(stillAuto)} — use the per-issue buttons to retry.`);
+      if (manual.length) {
+        const hint = manual.some(i => i.code === 'cannibalization') ? ' (for cannibalization, set a canonical tag to the competing article)' : '';
+        parts.push(`Needs manual action: ${listIssueTitles(manual)}${hint}.`);
+      }
+      showNotification(parts.join(' '), failures.length === 0 && fixed.length > 0 ? 'success' : 'error', 9000);
+    } catch (err) {
+      console.error('Auto-Fix All error:', err);
+      showNotification(err.message || 'Auto-Fix All failed.', 'error');
+      setAiSteps(prev => prev.map(step => (step.status === 'active' ? { ...step, status: 'failed' } : step)));
+    } finally {
+      setAiLoading('');
+      setAiProgress('');
+      // Leave the finished tracker up for a moment so the ✓/✕ per step is
+      // readable alongside the summary toast.
+      aiStepsHideTimer.current = setTimeout(() => setAiStepsShown(false), 7000);
+    }
+  };
+
   const handleEditorChange = (newContent, editor) => {
     setContent(newContent);
     setEditorData(prev => ({
@@ -1284,6 +1021,80 @@ function BlogEditorContent() {
         content: newContent
       }
     }));
+  };
+
+  // Recovers the image's original alt text from the WordPress media library
+  // (see /api/admin/media-alt). Runs automatically (see the effect below);
+  // it only prefills an empty field, and the Save button commits the value.
+  const fetchOriginalAltText = async (src) => {
+    const imageSrc = (src || '').trim();
+    if (!imageSrc) return;
+    setAltLookupLoading(true);
+    try {
+      const res = await fetch(`/api/admin/media-alt?src=${encodeURIComponent(imageSrc)}`);
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || 'Lookup failed.');
+      }
+      // The author may have started typing while this was in flight.
+      if (result.alt && !featuredImageAltRef.current.trim()) {
+        setFeaturedImageAlt(result.alt);
+        setAltHint('Original alt text from the source image — click Save to keep it.');
+      }
+    } catch (err) {
+      console.error('Original alt lookup error:', err);
+    } finally {
+      setAltLookupLoading(false);
+    }
+  };
+
+  // Whenever a WordPress-hosted image is set and there's no alt text yet,
+  // fetch the original alt from the source automatically. Debounced so
+  // typing a URL doesn't fire a lookup per keystroke.
+  useEffect(() => {
+    if (!featuredImage || featuredImageAltRef.current.trim() || !/wp-content\/uploads\//i.test(featuredImage)) return;
+    const timer = setTimeout(() => fetchOriginalAltText(featuredImage), 600);
+    return () => clearTimeout(timer);
+  }, [featuredImage]);
+
+  // Saves only the featured image + alt text on an existing post. It's a
+  // partial update, so status, publishedAt and translations are untouched;
+  // the full "Save"/"Publish" buttons still send everything.
+  const handleSaveAltText = async () => {
+    if (!postId) {
+      showNotification('Save the post first; after that the alt text can be saved on its own.', 'error');
+      return;
+    }
+    const nextAlt = featuredImageAlt.trim();
+    setAltSaveState('saving');
+    try {
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ featuredImage, featuredImageAlt: nextAlt })
+      });
+      const result = await res.json();
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || 'Failed to save alt text.');
+      }
+      setFeaturedImageAlt(nextAlt);
+      setSavedFeaturedImageAlt(nextAlt);
+      setAltHint('');
+      if (result.data) {
+        setPostDates({
+          createdAt: result.data.createdAt || null,
+          publishedAt: result.data.publishedAt || null,
+          updatedAt: result.data.updatedAt || null
+        });
+      }
+      setAltSaveState('saved');
+      setTimeout(() => setAltSaveState('idle'), 2000);
+      showNotification('Featured image alt text saved.');
+    } catch (err) {
+      console.error('Alt text save error:', err);
+      setAltSaveState('idle');
+      showNotification(err.message || 'Failed to save alt text.', 'error');
+    }
   };
 
   const handleFeaturedImageUpload = () => {
@@ -1414,6 +1225,22 @@ function BlogEditorContent() {
       }
     }
 
+    // Score the English base post (whatever language tab is open), since
+    // that's what the dashboard lists and what search engines index first.
+    const enMetrics = analyzeReadabilityAndSeo({
+      title: enData.seoTitle || enData.title,
+      slug,
+      description: enData.seoDescription || enData.excerpt,
+      content: enData.content,
+      featuredImage,
+      featuredImageAlt,
+      existingPosts,
+      currentPostId: postId,
+      canonicalUrl,
+      canonicalMode,
+      primaryKeyword: primaryKeyword.trim()
+    });
+
     const postData = {
       title: enData.title,
       slug,
@@ -1433,7 +1260,12 @@ function BlogEditorContent() {
         keywords: [...categories, ...tags],
         primaryKeyword: primaryKeyword.trim(),
         focusKeyword: primaryKeyword.trim(),
-        canonicalUrl: canonicalMode === 'custom' ? canonicalUrl.trim() : ''
+        canonicalUrl: canonicalMode === 'custom' ? canonicalUrl.trim() : '',
+        // Stored so the dashboard can list scores without loading bodies.
+        score: enMetrics.seoScore,
+        readability: enMetrics.fleschScore,
+        grade: enMetrics.gradeLevel,
+        scoredAt: new Date().toISOString()
       },
       promotion: {
         imageUrl: promoImage,
@@ -1459,7 +1291,15 @@ function BlogEditorContent() {
       const result = await res.json();
 
       if (res.ok && result.success) {
-        return { success: true, id: result.data?._id };
+        return {
+          success: true,
+          id: result.data?._id,
+          dates: result.data ? {
+            createdAt: result.data.createdAt || null,
+            publishedAt: result.data.publishedAt || null,
+            updatedAt: result.data.updatedAt || null
+          } : null
+        };
       }
       showNotification(result.error || 'Failed to save post.', 'error');
       return { success: false };
@@ -1486,9 +1326,12 @@ function BlogEditorContent() {
       }
     };
 
-    const { success, id } = await persistEditorData(updatedEditorData, postStatus);
+    const { success, id, dates } = await persistEditorData(updatedEditorData, postStatus);
     if (success) {
       setStatus(postStatus);
+      if (dates) setPostDates(dates);
+      setSavedFeaturedImageAlt(featuredImageAlt);
+      setAltHint('');
       setEditorData(updatedEditorData);
       showNotification(`Post successfully saved as ${postStatus}!`);
 
@@ -1656,107 +1499,110 @@ function BlogEditorContent() {
       <div className="editor-layout">
         {/* Main Work Area */}
         <div className="main-editor-pane">
-          {/* Ultra-compact single-row language strip */}
-          <div className="lang-strip">
-            <div className="lang-strip-left">
-              <div className="lang-strip-label" title="Languages">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                <span>Lang:</span>
-              </div>
-
-              <div className="lang-pills-wrap">
-                {allLanguages.map((lang) => {
-                  const isActive = selectedLang === lang.code;
-                  const isTranslationLang = lang.group === 'Translations';
-                  const hasContent = (lang.code === 'en' ? title : editorData[lang.code]?.title)?.trim() !== '';
-                  const status = getLangStatus(lang);
-                  const busy = langActionBusy[lang.code];
-                  const isFirstTranslation = lang.code === 'hi';
-
-                  return (
-                    <React.Fragment key={lang.code}>
-                      {isFirstTranslation && <span className="lang-pills-separator" />}
-                      <div
-                        className={`lang-pill ${isActive ? 'active' : ''} ${status.key}`}
-                        title={`${lang.label} (${status.text})`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleLangChange(lang.code)}
-                          className="lang-pill-main"
-                        >
-                          <span className="lang-pill-name">{lang.short || lang.code.toUpperCase()}</span>
-                          <span className={`lang-symbol ${status.key}`}>{status.symbol}</span>
-                        </button>
-
-                        {isTranslationLang && hasContent && (
-                          <div className="lang-pill-actions">
-                            <button
-                              type="button"
-                              className="lang-micro-btn"
-                              title={`Re-translate ${lang.label}`}
-                              disabled={!!busy}
-                              onClick={(e) => { e.stopPropagation(); handleRetranslateOne(lang.code); }}
-                            >
-                              {busy === 'retranslating' ? (
-                                <span className="translate-spinner mini" />
-                              ) : (
-                                '↻'
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              className="lang-micro-btn danger"
-                              title={`Delete ${lang.label} translation`}
-                              disabled={!!busy}
-                              onClick={(e) => { e.stopPropagation(); handleDeleteTranslation(lang.code); }}
-                            >
-                              {busy === 'deleting' ? (
-                                <span className="translate-spinner mini" />
-                              ) : (
-                                '×'
-                              )}
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => { setTranslateResult(null); setTranslateProgress({}); setShowTranslateModal(true); }}
-              className="btn-translate-compact"
-              title="Auto Translate post to other languages"
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-              <span>Auto Translate</span>
-            </button>
-          </div>
-
           <div className="main-editor-card">
-            {/* Compact Title Row with expandable Slug/Excerpt Drawer trigger */}
-            <div className="editor-title-row">
-              <input
-                type="text"
-                className="editor-title-input"
-                placeholder={`Post title (${selectedLang.toUpperCase()})...`}
-                value={title}
-                onChange={(e) => onTitleChange(e.target.value)}
-              />
-              <button
-                type="button"
-                className={`btn-meta-toggle ${showMetaDrawer ? 'open' : ''}`}
-                onClick={() => setShowMetaDrawer(!showMetaDrawer)}
-                title="Toggle URL Slug and Excerpt drawer"
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                <span className="meta-toggle-slug">/{slug || 'slug'}</span>
-                <span className="meta-toggle-chevron">{showMetaDrawer ? '▲' : '▼'}</span>
-              </button>
+            {/* Language strip + title row stay pinned under the site header while
+                the article scrolls (see .editor-sticky-top) */}
+            <div className="editor-sticky-top">
+              {/* Ultra-compact single-row language strip */}
+              <div className="lang-strip">
+                <div className="lang-strip-left">
+                  <div className="lang-strip-label" title="Languages">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    <span>Lang:</span>
+                  </div>
+
+                  <div className="lang-pills-wrap">
+                    {allLanguages.map((lang) => {
+                      const isActive = selectedLang === lang.code;
+                      const isTranslationLang = lang.group === 'Translations';
+                      const hasContent = (lang.code === 'en' ? title : editorData[lang.code]?.title)?.trim() !== '';
+                      const status = getLangStatus(lang);
+                      const busy = langActionBusy[lang.code];
+                      const isFirstTranslation = lang.code === 'hi';
+
+                      return (
+                        <React.Fragment key={lang.code}>
+                          {isFirstTranslation && <span className="lang-pills-separator" />}
+                          <div
+                            className={`lang-pill ${isActive ? 'active' : ''} ${status.key}`}
+                            title={`${lang.label} (${status.text})`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleLangChange(lang.code)}
+                              className="lang-pill-main"
+                            >
+                              <span className="lang-pill-name">{lang.short || lang.code.toUpperCase()}</span>
+                              <span className={`lang-symbol ${status.key}`}>{status.symbol}</span>
+                            </button>
+
+                            {isTranslationLang && hasContent && (
+                              <div className="lang-pill-actions">
+                                <button
+                                  type="button"
+                                  className="lang-micro-btn"
+                                  title={`Re-translate ${lang.label}`}
+                                  disabled={!!busy}
+                                  onClick={(e) => { e.stopPropagation(); handleRetranslateOne(lang.code); }}
+                                >
+                                  {busy === 'retranslating' ? (
+                                    <span className="translate-spinner mini" />
+                                  ) : (
+                                    '↻'
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="lang-micro-btn danger"
+                                  title={`Delete ${lang.label} translation`}
+                                  disabled={!!busy}
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteTranslation(lang.code); }}
+                                >
+                                  {busy === 'deleting' ? (
+                                    <span className="translate-spinner mini" />
+                                  ) : (
+                                    '×'
+                                  )}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => { setTranslateResult(null); setTranslateProgress({}); setShowTranslateModal(true); }}
+                  className="btn-translate-compact"
+                  title="Auto Translate post to other languages"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                  <span>Auto Translate</span>
+                </button>
+              </div>
+
+              <div className="editor-title-row">
+                <input
+                  type="text"
+                  className="editor-title-input"
+                  placeholder={`Post title (${selectedLang.toUpperCase()})...`}
+                  value={title}
+                  onChange={(e) => onTitleChange(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className={`btn-meta-toggle ${showMetaDrawer ? 'open' : ''}`}
+                  onClick={() => setShowMetaDrawer(!showMetaDrawer)}
+                  title="Toggle URL Slug and Excerpt drawer"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                  <span className="meta-toggle-slug">/{slug || 'slug'}</span>
+                  <span className="meta-toggle-chevron">{showMetaDrawer ? '▲' : '▼'}</span>
+                </button>
+              </div>
             </div>
 
             {/* Expandable Meta Drawer for Slug & Excerpt right below title */}
@@ -1802,13 +1648,20 @@ function BlogEditorContent() {
               <div className="rich-editor-wrapper">
                 <Editor
                   tinymceScriptSrc="https://cdnjs.cloudflare.com/ajax/libs/tinymce/7.3.0/tinymce.min.js"
-                  onInit={(evt, editor) => editorRef.current = editor}
+                  onInit={(evt, editor) => {
+                    editorRef.current = editor;
+                    try { editor.options.set('toolbar_sticky_offset', getEditorStickyOffset()); } catch { /* older API */ }
+                  }}
                   value={content}
                   onEditorChange={handleEditorChange}
                   init={{
                     height: 3300,
                     min_height: 3000,
                     resize: true,
+                    // Menubar + toolbar dock under the pinned title block while
+                    // the (page-scrolling) editor is in view.
+                    toolbar_sticky: true,
+                    toolbar_sticky_offset: 197,
                     branding: false,
                     promotion: false,
                     menubar: true,
@@ -2046,13 +1899,36 @@ function BlogEditorContent() {
                 {status}
               </span>
             </div>
+            <div className="publish-meta-row">
+              <span className="form-label">Published:</span>
+              <span className={`publish-meta-value ${postDates.publishedAt ? '' : 'muted'}`}>
+                {postDates.publishedAt ? formatDateTime(postDates.publishedAt) : 'Not published yet'}
+              </span>
+            </div>
+            {wasEditedAfterPublish(postDates) && (
+              <div className="publish-meta-row">
+                <span className="form-label">Last modified:</span>
+                <span className="publish-meta-value">{formatDateTime(postDates.updatedAt)}</span>
+              </div>
+            )}
             <div className="form-group">
-              <label className="form-label">Author Name</label>
+              <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Author Name</span>
+                <button
+                  type="button"
+                  onClick={() => setIsAuthorLocked(!isAuthorLocked)}
+                  style={{ background: 'none', border: 'none', color: isAuthorLocked ? '#2563eb' : '#16a34a', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}
+                  title={isAuthorLocked ? 'Unlock to change the author name' : 'Lock the author name'}
+                >
+                  {isAuthorLocked ? '🔒 Edit Author' : '🔓 Lock Author'}
+                </button>
+              </label>
               <input
                 type="text"
                 className="input-text"
                 style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
                 value={author}
+                disabled={isAuthorLocked}
                 onChange={(e) => setAuthor(e.target.value)}
               />
             </div>
@@ -2132,8 +2008,10 @@ function BlogEditorContent() {
                   <span>5G 📶 100% 🔋</span>
                 </div>
                 <div className="serp-mobile-searchbar">
-                  <span style={{ fontSize: '0.8rem' }}>🔍</span>
-                  <span style={{ color: '#64748b' }}>google.com/search?q={encodeURIComponent((seoTitle || title || 'prana air').toLowerCase())}</span>
+                  <span style={{ fontSize: '0.8rem', flexShrink: 0 }}>🔍</span>
+                  <span className="serp-mobile-url" title={`google.com/search?q=${encodeURIComponent((seoTitle || title || 'prana air').toLowerCase())}`}>
+                    google.com/search?q={encodeURIComponent((seoTitle || title || 'prana air').toLowerCase())}
+                  </span>
                 </div>
 
                 <div className="serp-preview-card" style={{ padding: '0.75rem 0.85rem' }}>
@@ -2253,7 +2131,7 @@ function BlogEditorContent() {
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                  <span>{showAuditDrawer ? 'Hide Audit' : 'View Audit & Solutions'}</span>
+                  <span>{showAuditDrawer ? 'Hide' : 'View'}</span>
                   <span>{showAuditDrawer ? '▲' : '▼'}</span>
                 </div>
               </button>
@@ -2296,70 +2174,95 @@ function BlogEditorContent() {
                     <button
                       type="button"
                       className="btn-claude-ai-fix"
-                      title="Automatically optimize Title (45-60c), Slug, and Meta Description (125-155c) with Claude"
-                      onClick={() => handleAiFixSeo('fix_all')}
+                      title="Fix every flagged issue Claude can handle: keyword, article body, then Title (45-60c), Slug and Meta Description (125-155c), re-checked against this audit"
+                      onClick={handleAutoFixAll}
                       disabled={!!aiLoading}
                     >
-                      {aiLoading === 'fix_all' ? '✨ Claude Optimizing...' : '✨ Auto-Fix All with Claude'}
+                      {aiLoading === 'fix_all'
+                        ? <><span className="seo-ai-spinner light" aria-hidden="true" /> {aiProgress || 'Claude Optimizing...'}</>
+                        : '✨ Auto-Fix All with Claude'}
                     </button>
                   </div>
 
-                  <div className="seo-audit-content">
+                  {(aiLoading || aiStepsShown) && (
+                    <div className="seo-ai-progress" role="status" aria-live="polite">
+                      <div className={`seo-ai-progress-bar ${aiLoading ? '' : 'complete'}`}><span /></div>
+                      {aiSteps.length > 0 ? (
+                        <ol className="seo-ai-steps">
+                          {aiSteps.map(step => (
+                            <li key={step.key} className={`seo-ai-step ${step.status}`}>
+                              <span className="seo-ai-step-icon" aria-hidden="true">
+                                {step.status === 'active' && <span className="seo-ai-spinner" />}
+                                {step.status === 'done' && '✓'}
+                                {step.status === 'failed' && '✕'}
+                                {step.status === 'skipped' && '–'}
+                                {step.status === 'pending' && '○'}
+                              </span>
+                              <span className="seo-ai-step-label">
+                                {step.label}{step.detail ? <em> · {step.detail}</em> : null}
+                              </span>
+                            </li>
+                          ))}
+                        </ol>
+                      ) : (
+                        <div className="seo-ai-progress-label">
+                          <span className="seo-ai-spinner" aria-hidden="true" />
+                          {AI_ACTION_LABELS[aiLoading] || 'Claude is working…'}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className={`seo-audit-content ${aiLoading ? 'is-working' : ''}`}>
                     {auditTab === 'issues' && (
                       <>
-                        {hasCannibalization && (
-                          <div
-                            style={{
-                              background: '#fffbeb',
-                              border: '1px solid #fde68a',
-                              borderRadius: '7px',
-                              padding: '0.5rem 0.75rem',
-                              fontSize: '0.72rem',
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              color: '#92400e',
-                              gap: '0.5rem'
-                            }}
-                          >
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <span>⚠️ <strong>Keyword Cannibalization Detected</strong> ({cannibalizationIssue.cannibalization.primaryConflict.overlapScore}% overlap)</span>
-                              <div style={{ fontSize: '0.68rem', color: '#b45309', marginTop: '0.15rem' }}>
-                                Competing with: &quot;{cannibalizationIssue.cannibalization.primaryConflict.title}&quot;
+                        {hasCannibalization && (() => {
+                          const conflict = cannibalizationIssue.cannibalization.primaryConflict;
+                          const highRisk = conflict.overlapScore >= 68;
+                          return (
+                            <div className={`cannibal-banner ${highRisk ? 'high' : ''}`} role="alert">
+                              <div className="cannibal-banner-head">
+                                <span className="cannibal-banner-icon" aria-hidden="true">⚠️</span>
+                                <strong className="cannibal-banner-title">Keyword cannibalization</strong>
+                                <span className="cannibal-banner-overlap" title={highRisk ? 'High conflict risk' : 'Moderate conflict risk'}>
+                                  {conflict.overlapScore}% overlap
+                                </span>
+                              </div>
+                              <div className="cannibal-banner-competing">
+                                <span className="cannibal-banner-label">Competing with</span>
+                                <a
+                                  href={conflict.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="cannibal-banner-link"
+                                  title={`${decodeEntitiesForDisplay(conflict.title)} — open in a new tab`}
+                                >
+                                  {decodeEntitiesForDisplay(conflict.title)}
+                                </a>
+                              </div>
+                              <div className="cannibal-banner-actions">
+                                <button
+                                  type="button"
+                                  className="btn-claude-inline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAiFixSeo('differentiate_cannibalization');
+                                  }}
+                                  disabled={!!aiLoading}
+                                >
+                                  {aiLoading === 'differentiate_cannibalization' ? <><span className="seo-ai-spinner" aria-hidden="true" /> Fixing…</> : '✨ Differentiate'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="cannibal-banner-proof"
+                                  onClick={() => setAuditTab('cannibalization')}
+                                >
+                                  See proof →
+                                </button>
                               </div>
                             </div>
-                            <div style={{ display: 'flex', gap: '0.35rem', flexShrink: 0, alignItems: 'center' }}>
-                              <button
-                                type="button"
-                                className="btn-claude-inline"
-                                style={{ margin: 0, padding: '0.2rem 0.45rem', fontSize: '0.68rem' }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleAiFixSeo('differentiate_cannibalization');
-                                }}
-                                disabled={!!aiLoading}
-                              >
-                                {aiLoading === 'differentiate_cannibalization' ? '✨ Fixing...' : '✨ Differentiate'}
-                              </button>
-                              <button
-                                type="button"
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: '#b45309',
-                                  fontWeight: 700,
-                                  fontSize: '0.72rem',
-                                  cursor: 'pointer',
-                                  textDecoration: 'underline',
-                                  padding: 0
-                                }}
-                                onClick={() => setAuditTab('cannibalization')}
-                              >
-                                Proof →
-                              </button>
-                            </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                         {generalIssues.length === 0 ? (
                           <div style={{ color: '#16a34a', fontSize: '0.8rem', textAlign: 'center', padding: '1rem' }}>
                             🎉 Outstanding! No on-page SEO or readability issues found.
@@ -2412,7 +2315,7 @@ function BlogEditorContent() {
                                     onClick={() => handleAiFixSeo(aiAction)}
                                     disabled={!!aiLoading}
                                   >
-                                    {aiLoading === aiAction ? '✨ Generating...' : aiBtnLabel}
+                                    {aiLoading === aiAction ? <><span className="seo-ai-spinner" aria-hidden="true" /> Generating…</> : aiBtnLabel}
                                   </button>
                                 )}
                               </div>
@@ -2478,7 +2381,7 @@ function BlogEditorContent() {
                                   onClick={() => handleAiFixSeo('differentiate_cannibalization')}
                                   disabled={!!aiLoading}
                                 >
-                                  {aiLoading === 'differentiate_cannibalization' ? '✨ Differentiating...' : '✨ Differentiate with Claude'}
+                                  {aiLoading === 'differentiate_cannibalization' ? <><span className="seo-ai-spinner" aria-hidden="true" /> Differentiating…</> : '✨ Differentiate with Claude'}
                                 </button>
                                 <button
                                   type="button"
@@ -2753,7 +2656,7 @@ function BlogEditorContent() {
             <div className="form-group" style={{ marginTop: '0.85rem' }}>
               <div className="seo-metric-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <label className="form-label" style={{ margin: 0 }}>Meta Description &amp; Excerpt ({selectedLang.toUpperCase()})</label>
+                  <label className="form-label" style={{ margin: 0 }}>Meta Description ({selectedLang.toUpperCase()})</label>
                   <button
                     type="button"
                     className="btn-claude-field-quick"
@@ -2843,9 +2746,37 @@ function BlogEditorContent() {
                     style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', flexGrow: 1 }}
                     placeholder="Image Alt Text (SEO)..."
                     value={featuredImageAlt}
-                    onChange={(e) => setFeaturedImageAlt(e.target.value)}
+                    onChange={(e) => { setFeaturedImageAlt(e.target.value); setAltHint(''); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (altIsDirty && altSaveState !== 'saving') handleSaveAltText();
+                      }
+                    }}
                   />
+                  <button
+                    type="button"
+                    onClick={handleSaveAltText}
+                    className="btn btn-primary"
+                    disabled={!altIsDirty || altSaveState === 'saving'}
+                    title={!postId
+                      ? 'Save the post first, then alt text can be saved on its own'
+                      : (altIsDirty ? 'Save the alt text for this image' : 'Alt text is up to date')}
+                    style={{ padding: '0.5rem 1rem', whiteSpace: 'nowrap', minWidth: '5.5rem' }}
+                  >
+                    {altSaveState === 'saving' ? 'Saving…' : altSaveState === 'saved' ? '✓ Saved' : 'Save'}
+                  </button>
                 </div>
+                {altLookupLoading && !altHint && (
+                  <div style={{ fontSize: '0.72rem', color: '#9ca3af', marginTop: '-0.35rem', fontStyle: 'italic' }}>
+                    Looking up the original alt text…
+                  </div>
+                )}
+                {altHint && (
+                  <div style={{ fontSize: '0.72rem', color: '#2563eb', marginTop: '-0.35rem' }}>
+                    ↳ {altHint}
+                  </div>
+                )}
               </div>
             </div>
           </div>

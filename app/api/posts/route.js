@@ -1,6 +1,9 @@
 import connectDB from '../../../lib/db';
 import Post from '../../../models/post';
 import { isAdminAuthenticated } from '../../../lib/adminAuth';
+import seoAnalysis from '../../../lib/seoAnalysis';
+
+const { refreshStoredScores } = seoAnalysis;
 
 // CORS headers – allow any origin to fetch blog content (public API)
 const CORS_HEADERS = {
@@ -126,6 +129,21 @@ export async function POST(request) {
     }
 
     const newPost = await Post.create(body);
+
+    // Server-side scoring keeps the dashboard's SEO/readability columns in
+    // step with whatever was just saved (the editor also sends scores, but
+    // this is the source of truth).
+    try {
+      const scores = await refreshStoredScores(Post, newPost);
+      if (scores) {
+        newPost.seo = newPost.seo || {};
+        newPost.seo.score = scores.score;
+        newPost.seo.readability = scores.readability;
+        newPost.seo.grade = scores.grade;
+      }
+    } catch (scoreErr) {
+      console.error('Post created but scoring failed:', scoreErr);
+    }
 
     return Response.json({ success: true, data: newPost }, { status: 201 });
   } catch (error) {

@@ -67,6 +67,18 @@ const PostSchema = new mongoose.Schema(
         trim: true,
         default: '',
       },
+      primaryKeyword: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+      // On-page scores from lib/seoAnalysis.js, written on every editor save
+      // (and by scripts/backfill-seo-scores.js) so the dashboard can list
+      // them without loading article bodies.
+      score: { type: Number, default: null },
+      readability: { type: Number, default: null },
+      grade: { type: Number, default: null },
+      scoredAt: { type: Date, default: null },
     },
     promotion: {
       imageUrl: { type: String, default: '' },
@@ -131,8 +143,7 @@ const PostSchema = new mongoose.Schema(
   }
 );
 
-// Add index on slug for fast queries
-PostSchema.index({ slug: 1 });
+// slug is already indexed by `unique: true` above.
 // Lets MongoDB satisfy `.sort({ publishedAt: -1 })` from the index directly
 // instead of buffering results in memory, which now overflows the 32MB
 // in-memory sort limit given the full-content English-variant translations.

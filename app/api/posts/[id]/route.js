@@ -3,6 +3,9 @@ import Post from '../../../../models/post';
 import BannerSettings from '../../../../models/BannerSettings';
 import { isAdminAuthenticated } from '../../../../lib/adminAuth';
 import mongoose from 'mongoose';
+import seoAnalysis from '../../../../lib/seoAnalysis';
+
+const { refreshStoredScores } = seoAnalysis;
 
 // CORS headers
 const CORS_HEADERS = {
@@ -170,6 +173,20 @@ export async function PUT(request, { params }) {
 
     if (!post) {
       return Response.json({ success: false, error: 'Post not found.' }, { status: 404 });
+    }
+
+    // Any update path (full editor save, alt-text-only save, ...) refreshes
+    // the stored SEO/readability scores the dashboard lists.
+    try {
+      const scores = await refreshStoredScores(Post, post);
+      if (scores) {
+        post.seo = post.seo || {};
+        post.seo.score = scores.score;
+        post.seo.readability = scores.readability;
+        post.seo.grade = scores.grade;
+      }
+    } catch (scoreErr) {
+      console.error('Post updated but scoring failed:', scoreErr);
     }
 
     return Response.json({ success: true, data: post });

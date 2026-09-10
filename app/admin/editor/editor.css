@@ -138,7 +138,14 @@
 
 @media (max-width: 1100px) {
   .editor-layout {
-    grid-template-columns: 1fr;
+    /* minmax(0, 1fr): a plain 1fr lets any wide child (toolbar, pill rows)
+       stretch the column past the viewport on phones. */
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .main-editor-pane,
+  .editor-sidebar {
+    min-width: 0;
+    max-width: 100%;
   }
 }
 
@@ -345,6 +352,40 @@
   gap: 0.85rem;
 }
 
+/* Pinned top of the editor card: language strip + title row. Negative
+   margins let it span the card's padding so scrolled content never peeks
+   out beside it; the runtime sets --editor-sticky-top to the header height. */
+.editor-sticky-top {
+  position: sticky;
+  top: var(--editor-sticky-top, 72px);
+  z-index: 30;
+  background: var(--bg-card, #fff);
+  margin: -1.15rem -1.35rem 0;
+  padding: 0.85rem 1.35rem 0.85rem;
+  border-radius: 16px 16px 0 0;
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  box-shadow: 0 8px 12px -10px rgba(15, 23, 42, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.editor-sticky-top .lang-strip {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 0 0.6rem;
+  border-bottom: 1px dashed var(--border-color, #e5e7eb);
+}
+
+@media (max-width: 768px) {
+  /* Too tall to pin on phones once the strip wraps; scroll normally. */
+  .editor-sticky-top {
+    position: static;
+    box-shadow: none;
+  }
+}
+
 @media (max-width: 640px) {
   .main-editor-card {
     padding: 1rem;
@@ -358,10 +399,21 @@
   align-items: center;
   gap: 0.75rem;
   width: 100%;
+  min-width: 0;
+}
+
+/* Phones: the title input's intrinsic width plus the slug button exceed
+   the row, so let the button drop underneath and take the full width. */
+@media (max-width: 640px) {
+  .editor-title-row { flex-wrap: wrap; }
+  .editor-title-row .editor-title-input { flex: 1 1 100%; min-width: 0; }
+  .editor-title-row .btn-meta-toggle { width: 100%; min-width: 0; box-sizing: border-box; }
+  .editor-title-row .meta-toggle-slug { flex: 1; min-width: 0; max-width: none; }
 }
 
 .editor-title-input {
   flex: 1;
+  min-width: 0;
   font-family: inherit;
   font-size: 1.35rem;
   font-weight: 700;
@@ -383,6 +435,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  min-width: 0;
+  max-width: 100%;
   padding: 0.6rem 0.85rem;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -479,6 +533,9 @@
   border: 1px solid #dadce0;
   border-radius: 12px;
   padding: 1rem 1.1rem;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
   box-shadow: 0 1px 6px rgba(32, 33, 36, 0.08);
   transition: all 0.2s ease;
@@ -491,6 +548,10 @@
   border-radius: 18px;
   padding: 0.75rem 0.85rem 1rem;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .serp-mobile-statusbar {
@@ -516,13 +577,28 @@
   font-size: 0.75rem;
   color: #334155;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The query echoes the whole title; keep it to one truncated line like a
+   real address bar instead of spilling past the phone frame. */
+.serp-mobile-url {
+  flex: 1;
+  min-width: 0;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .serp-header-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
   margin-bottom: 0.45rem;
+  min-width: 0;
 }
 
 .serp-source-info {
@@ -530,6 +606,8 @@
   align-items: center;
   gap: 0.6rem;
   overflow: hidden;
+  flex: 1;
+  min-width: 0;
 }
 
 .serp-favicon-wrap {
@@ -554,6 +632,7 @@
   flex-direction: column;
   line-height: 1.25;
   overflow: hidden;
+  min-width: 0;
 }
 
 .serp-site-name {
@@ -569,6 +648,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
 }
 
 .serp-kebab-menu {
@@ -578,6 +659,7 @@
   padding: 0 0.25rem;
   cursor: pointer;
   user-select: none;
+  flex-shrink: 0;
 }
 
 .serp-preview-title {
@@ -592,6 +674,7 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
 }
 
 .serp-preview-title:hover {
@@ -608,6 +691,7 @@
   display: flex;
   gap: 0.75rem;
   align-items: flex-start;
+  min-width: 0;
 }
 
 .serp-preview-desc {
@@ -620,6 +704,8 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .serp-date-prefix {
@@ -661,6 +747,7 @@
   display: flex;
   gap: 0.4rem;
   margin-top: 0.6rem;
+  flex-wrap: wrap;
 }
 
 .serp-mobile-action-pill {
@@ -679,19 +766,33 @@
 /* ---------- Realistic SEO & Readability Dashboard ---------- */
 .seo-score-dashboard {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, 1fr): with a plain 1fr the readability tile's labels widen
+     the column past the card. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
   margin-top: 1rem;
 }
 
+/* Narrow sidebar cards (tablet grid): one tile per row instead of two
+   cramped ones. */
+@container (max-width: 250px) {
+  .seo-score-dashboard { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Ring on top, text underneath: side by side there's only ~70px left for
+   the label next to the ring in a 360px sidebar, so the words got clipped. */
 .score-badge-card {
   background: #ffffff;
   border: 1.5px solid #e2e8f0;
   border-radius: 12px;
-  padding: 0.65rem 0.75rem;
+  padding: 0.75rem 0.6rem 0.7rem;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 0.65rem;
+  text-align: center;
+  gap: 0.45rem;
+  min-width: 0;
+  box-sizing: border-box;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
@@ -740,15 +841,19 @@
 .score-details {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 0;
+  width: 100%;
 }
 
 .score-label {
-  font-size: 0.7rem;
+  font-size: 0.64rem;
   font-weight: 700;
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  line-height: 1.2;
 }
 
 .score-status {
@@ -759,22 +864,22 @@
 
 .score-grade-badge {
   display: inline-block;
+  max-width: 100%;
+  box-sizing: border-box;
   font-size: 0.72rem;
   font-weight: 700;
   color: #0f172a;
   background: #f1f5f9;
-  padding: 0.1rem 0.35rem;
+  padding: 0.1rem 0.4rem;
   border-radius: 4px;
-  margin-top: 0.1rem;
   white-space: nowrap;
 }
 
 .score-subtext {
   font-size: 0.68rem;
   color: #94a3b8;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.3;
+  overflow-wrap: break-word; /* wraps instead of truncating */
 }
 
 /* SEO & Readability Issues / Passed Checklist Accordion */
@@ -1194,6 +1299,240 @@
   cursor: not-allowed;
 }
 
+/* ---- Cannibalization banner (top of the Issues tab) --------------------- */
+.cannibal-banner {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-left: 4px solid #f59e0b;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  color: #92400e;
+  min-width: 0;
+}
+
+.cannibal-banner.high {
+  background: #fef2f2;
+  border-color: #fecaca;
+  border-left-color: #ef4444;
+  color: #991b1b;
+}
+
+.cannibal-banner-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.cannibal-banner-icon { font-size: 0.8rem; line-height: 1; }
+
+.cannibal-banner-title {
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.cannibal-banner-overlap {
+  margin-left: auto;
+  font-size: 0.64rem;
+  font-weight: 700;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  background: #fde68a;
+  color: #78350f;
+  white-space: nowrap;
+}
+
+.cannibal-banner.high .cannibal-banner-overlap {
+  background: #fecaca;
+  color: #7f1d1d;
+}
+
+.cannibal-banner-competing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.cannibal-banner-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.cannibal-banner-link {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: rgba(146, 64, 14, 0.35);
+  text-underline-offset: 2px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.cannibal-banner-link:hover { text-decoration-color: currentColor; }
+
+.cannibal-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.1rem;
+}
+
+.cannibal-banner-actions .btn-claude-inline { margin: 0; }
+
+.cannibal-banner-proof {
+  background: none;
+  border: none;
+  padding: 0.2rem 0.1rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.cannibal-banner-proof:hover { opacity: 0.8; }
+
+/* ---- Claude AI progress (audit panel) ---------------------------------- */
+.seo-ai-progress {
+  padding: 0.5rem 0.75rem 0.55rem;
+  background: #faf5ff;
+  border-bottom: 1px solid #ddd6fe;
+}
+
+.seo-ai-progress-bar {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: #ede9fe;
+  overflow: hidden;
+}
+
+.seo-ai-progress-bar span {
+  position: absolute;
+  top: 0;
+  left: -40%;
+  width: 40%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #c4b5fd, #7c3aed, #6366f1);
+  animation: seo-ai-sweep 1.3s ease-in-out infinite;
+}
+
+.seo-ai-progress-bar.complete span {
+  left: 0;
+  width: 100%;
+  background: #16a34a;
+  animation: none;
+}
+
+.seo-ai-steps {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+}
+
+.seo-ai-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #a1a1aa;
+  transition: color 0.2s ease;
+}
+
+.seo-ai-step em {
+  font-style: normal;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.seo-ai-step.active { color: #6d28d9; }
+.seo-ai-step.done { color: #15803d; }
+.seo-ai-step.failed { color: #dc2626; }
+.seo-ai-step.skipped { color: #a1a1aa; }
+
+.seo-ai-step-icon {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.seo-ai-progress-label {
+  margin-top: 0.45rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #6d28d9;
+}
+
+.seo-ai-spinner {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  display: inline-block;
+  border: 2px solid rgba(124, 58, 237, 0.25);
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: seo-ai-spin 0.8s linear infinite;
+}
+
+.seo-ai-spinner.light {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+}
+
+.seo-audit-content.is-working {
+  animation: seo-ai-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes seo-ai-sweep {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+
+@keyframes seo-ai-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes seo-ai-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seo-ai-progress-bar span,
+  .seo-ai-spinner,
+  .seo-audit-content.is-working {
+    animation: none;
+  }
+}
+
 .btn-claude-inline {
   background: #f5f3ff;
   border: 1px solid #c4b5fd;
@@ -1441,7 +1780,9 @@
 
 @media (max-width: 640px) {
   .editor-sidebar {
-    grid-template-columns: 1fr;
+    /* minmax(0, 1fr), not 1fr: an `auto` minimum lets a no-wrap child (the
+       SERP breadcrumb) inflate the track past the phone's width. */
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -1452,6 +1793,13 @@
   padding: 1.5rem;
   box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
   transition: box-shadow 0.2s ease;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  /* The card's width comes from the sidebar, never from its contents, so
+     long slugs/URLs truncate instead of widening the page. Also makes the
+     card a query container for the score tiles below. */
+  container-type: inline-size;
 }
 
 .sidebar-card:hover {
@@ -1494,6 +1842,38 @@
 .status-badge.published {
   background-color: #dcfce7;
   color: #15803d;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.input-text:disabled {
+  background-color: #f3f4f6;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.publish-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.publish-meta-value {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1f2937;
+  text-align: right;
+}
+
+.publish-meta-value.muted {
+  color: #9ca3af;
+  font-weight: 500;
+  font-style: italic;
 }
 
 .tags-container {
