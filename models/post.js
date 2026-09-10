@@ -62,6 +62,11 @@ const PostSchema = new mongoose.Schema(
         type: [String],
         default: [],
       },
+      canonicalUrl: {
+        type: String,
+        trim: true,
+        default: '',
+      },
     },
     promotion: {
       imageUrl: { type: String, default: '' },
@@ -110,6 +115,11 @@ const PostSchema = new mongoose.Schema(
           keywords: {
             type: [String],
             default: [],
+          },
+          canonicalUrl: {
+            type: String,
+            trim: true,
+            default: '',
           },
         },
       },

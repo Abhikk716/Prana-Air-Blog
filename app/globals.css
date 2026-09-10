@@ -70,6 +70,57 @@ a {
   }
 }
 
+/* Post Editor layout with comfortable side margins across header, content, and footer */
+.main-header.header-full {
+  padding: 1rem 0 !important;
+}
+
+.header-container-full {
+  max-width: 1600px !important;
+  width: calc(100% - 6rem) !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+}
+
+.main-content-full,
+.main-content:has(.editor-container) {
+  max-width: 1600px !important;
+  width: calc(100% - 6rem) !important;
+  padding: 1.5rem 0 4rem !important;
+  margin: 0 auto !important;
+  box-sizing: border-box !important;
+}
+
+.footer-container-full {
+  max-width: 1600px !important;
+  width: calc(100% - 6rem) !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+}
+
+@media (max-width: 1024px) {
+  .header-container-full,
+  .main-content-full,
+  .main-content:has(.editor-container),
+  .footer-container-full {
+    width: calc(100% - 3rem) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-header.header-full {
+    padding: 1rem !important;
+  }
+  .header-container-full,
+  .main-content-full,
+  .main-content:has(.editor-container),
+  .footer-container-full {
+    width: 100% !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+}
+
 
 /* Premium Header (Glassmorphic) */
 .main-header {

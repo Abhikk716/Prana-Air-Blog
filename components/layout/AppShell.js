@@ -12,6 +12,7 @@ const CHROME_LESS_ROUTES = ['/admin/login'];
 export default function AppShell({ children }) {
   const pathname = usePathname();
   const hideChrome = CHROME_LESS_ROUTES.includes(pathname);
+  const isEditor = pathname?.startsWith('/admin/editor');
 
   if (hideChrome) {
     return <main className="main-content">{children}</main>;
@@ -19,8 +20,8 @@ export default function AppShell({ children }) {
 
   return (
     <>
-      <header className="main-header">
-        <div className="header-container">
+      <header className={`main-header ${isEditor ? 'header-full' : ''}`}>
+        <div className={`header-container ${isEditor ? 'header-container-full' : ''}`}>
           <a href="/" className="logo">
             Prana Air <span className="logo-accent">Blog</span>
           </a>
@@ -30,12 +31,12 @@ export default function AppShell({ children }) {
         </div>
       </header>
 
-      <main className="main-content">
+      <main className={`main-content ${isEditor ? 'main-content-full' : ''}`}>
         {children}
       </main>
 
       <footer className="main-footer">
-        <div className="footer-container">
+        <div className={`footer-container ${isEditor ? 'footer-container-full' : ''}`}>
           <div className="footer-info">
             <h3>Prana Air</h3>
             <p>Empowering you to breathe clean air through advanced monitoring and purification technology.</p>

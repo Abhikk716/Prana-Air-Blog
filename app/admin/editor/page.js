@@ -1,26 +1,26 @@
 'use client';
 
-import React, { useState, useEffect, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Script from 'next/script';
 import { Editor } from '@tinymce/tinymce-react';
 import './editor.css';
 
 const allLanguages = [
-  { code: 'en', label: 'Global English (EN)', group: 'English Variants' },
-  { code: 'in', label: 'English - India (EN-IN)', group: 'English Variants' },
-  { code: 'us', label: 'English - USA (EN-US)', group: 'English Variants' },
-  { code: 'en-GB', label: 'English - UK (EN-GB)', group: 'English Variants' },
-  { code: 'en-CA', label: 'English - Canada (EN-CA)', group: 'English Variants' },
-  { code: 'en-AU', label: 'English - Australia (EN-AU)', group: 'English Variants' },
-  { code: 'sg', label: 'English - Singapore (EN-SG)', group: 'English Variants' },
-  { code: 'hi', label: 'Hindi (HI)', group: 'Translations' },
-  { code: 'es', label: 'Spanish (ES)', group: 'Translations' },
-  { code: 'de', label: 'German (DE)', group: 'Translations' },
-  { code: 'fr', label: 'French (FR)', group: 'Translations' },
-  { code: 'ru', label: 'Russian (RU)', group: 'Translations' },
-  { code: 'ja', label: 'Japanese (JA)', group: 'Translations' },
-  { code: 'pt-PT', label: 'Portuguese (PT)', group: 'Translations' }
+  { code: 'en', label: 'Global English (EN)', short: 'EN', group: 'English Variants' },
+  { code: 'in', label: 'English - India (EN-IN)', short: 'IN', group: 'English Variants' },
+  { code: 'us', label: 'English - USA (EN-US)', short: 'US', group: 'English Variants' },
+  { code: 'en-GB', label: 'English - UK (EN-GB)', short: 'GB', group: 'English Variants' },
+  { code: 'en-CA', label: 'English - Canada (EN-CA)', short: 'CA', group: 'English Variants' },
+  { code: 'en-AU', label: 'English - Australia (EN-AU)', short: 'AU', group: 'English Variants' },
+  { code: 'sg', label: 'English - Singapore (EN-SG)', short: 'SG', group: 'English Variants' },
+  { code: 'hi', label: 'Hindi (HI)', short: 'HI', group: 'Translations' },
+  { code: 'es', label: 'Spanish (ES)', short: 'ES', group: 'Translations' },
+  { code: 'de', label: 'German (DE)', short: 'DE', group: 'Translations' },
+  { code: 'fr', label: 'French (FR)', short: 'FR', group: 'Translations' },
+  { code: 'ru', label: 'Russian (RU)', short: 'RU', group: 'Translations' },
+  { code: 'ja', label: 'Japanese (JA)', short: 'JA', group: 'Translations' },
+  { code: 'pt-PT', label: 'Portuguese (PT)', short: 'PT', group: 'Translations' }
 ];
 
 // Retries a single language's translation request on a 429 (rate limited)
@@ -67,10 +67,630 @@ async function runWithConcurrency(items, limit, worker) {
   return results;
 }
 
+// Counts syllables in a word for Flesch Reading Ease and Grade Level
+function countSyllables(word) {
+  if (!word) return 1;
+  word = word.toLowerCase().trim();
+  if (word.length <= 3) return 1;
+  word = word.replace(/(?:[^laeiouy]|ed|es|e)$/, '');
+  word = word.replace(/^y/, '');
+  const matches = word.match(/[aeiouy]{1,2}/g);
+  return matches ? matches.length : 1;
+}
+
+// Stop words list for search query keyword extraction
+const CANNIBALIZATION_STOP_WORDS = new Set([
+  'the', 'and', 'for', 'with', 'that', 'this', 'from', 'your', 'about', 'what',
+  'how', 'why', 'can', 'are', 'was', 'were', 'our', 'best', 'top', 'into', 'over',
+  'more', 'than', 'under', 'will', 'when', 'which', 'where', 'look', 'closer',
+  'secretly', 'quiet', 'ultimate', 'a', 'an', 'in', 'on', 'at', 'to', 'of', 'by', 'is',
+  'it', 'its', 'you', 'all', 'any', 'not', 'or', 'be', 'as', 'do', 'does', 'did', 'have',
+  'has', 'had', 'guide', 'tips', 'lessons', 'behind', 'routine', 'ranking', 'rankings',
+  'world', 'worlds', 'closer', 'technology'
+]);
+
+function extractTopicalKeywords(str) {
+  if (!str) return { words: [], phrases: [] };
+  const clean = str
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .toLowerCase()
+    .replace(/[^a-z0-9\.\-\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const tokens = clean.split(/[\s\-_]+/).filter(t => t.length >= 2);
+  const words = tokens.filter(t => t.length >= 3 && !CANNIBALIZATION_STOP_WORDS.has(t));
+
+  const phrases = [];
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const t1 = tokens[i];
+    const t2 = tokens[i + 1];
+    if (t1.length >= 3 && t2.length >= 3 && (!CANNIBALIZATION_STOP_WORDS.has(t1) || !CANNIBALIZATION_STOP_WORDS.has(t2))) {
+      phrases.push(`${t1} ${t2}`);
+    }
+  }
+
+  return { words: Array.from(new Set(words)), phrases: Array.from(new Set(phrases)) };
+}
+
+// Computes real-time SEO score, Flesch Reading Ease score, Grade Level, and actionable checklist
+function analyzeReadabilityAndSeo({
+  title = '',
+  slug = '',
+  description = '',
+  content = '',
+  featuredImage = '',
+  featuredImageAlt = '',
+  existingPosts = [],
+  currentPostId = null,
+  canonicalUrl = '',
+  canonicalMode = 'self',
+  primaryKeyword = ''
+}) {
+  const textWithSentenceBreaks = (content || '')
+    .replace(/<\/(p|h[1-6]|li|div|tr|blockquote)>/gi, '. ')
+    .replace(/<br\s*\/?>/gi, '. ');
+  const plainText = textWithSentenceBreaks.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = plainText.length > 0 ? plainText.split(/\s+/).filter(w => w.length > 0) : [];
+  const wordCount = words.length;
+
+  const sentences = plainText.length > 0 ? plainText.split(/[.!?]+/).filter(s => s.trim().length > 1) : [];
+  const sentenceCount = Math.max(1, sentences.length);
+
+  let totalSyllables = 0;
+  let complexWordCount = 0;
+  for (const w of words) {
+    const syl = countSyllables(w);
+    totalSyllables += syl;
+    if (syl >= 3) complexWordCount++;
+  }
+
+  // Flesch Reading Ease: 206.835 - 1.015 * (words / sentences) - 84.6 * (syllables / words)
+  let fleschScore = 100;
+  let gradeLevel = 5.0;
+  let wordsPerSentence = 12;
+  let complexWordPct = 0;
+  const longSentences = sentences.filter(s => s.trim().split(/\s+/).length > 22);
+
+  if (wordCount > 10) {
+    wordsPerSentence = Math.round((wordCount / sentenceCount) * 10) / 10;
+    const syllablesPerWord = totalSyllables / Math.max(1, wordCount);
+    complexWordPct = Math.round((complexWordCount / wordCount) * 100);
+    const flesch = 206.835 - (1.015 * (wordCount / sentenceCount)) - (84.6 * syllablesPerWord);
+    fleschScore = Math.max(0, Math.min(100, Math.round(flesch)));
+
+    // Flesch-Kincaid Grade Level: 0.39 * (words/sentences) + 11.8 * (syllables/words) - 15.59
+    const fkGrade = (0.39 * (wordCount / sentenceCount)) + (11.8 * syllablesPerWord) - 15.59;
+    gradeLevel = Math.max(1, Math.min(16, Math.round(fkGrade * 10) / 10));
+  }
+
+  let readabilityStatus = 'Good';
+  let readabilityColor = '#16a34a';
+  let readabilityLabel = 'Easy to Read';
+  if (fleschScore < 50) {
+    readabilityStatus = 'Difficult';
+    readabilityColor = '#ef4444';
+    readabilityLabel = 'Difficult / Academic';
+  } else if (fleschScore < 65) {
+    readabilityStatus = 'Moderate';
+    readabilityColor = '#f59e0b';
+    readabilityLabel = 'Fairly Standard';
+  } else {
+    readabilityStatus = 'Good';
+    readabilityColor = '#16a34a';
+    readabilityLabel = 'Plain English (Optimal)';
+  }
+
+  let seoScore = 0;
+  const issues = [];
+  const passed = [];
+
+  // 1. Title Length Check
+  const titleLen = (title || '').trim().length;
+  if (titleLen === 0) {
+    issues.push({
+      type: 'error',
+      title: 'Missing Post Title',
+      issue: 'The post has no title defined.',
+      solution: 'Add a clear, keyword-rich title between 40 and 60 characters.'
+    });
+  } else if (titleLen < 35) {
+    seoScore += 10;
+    issues.push({
+      type: 'warning',
+      title: 'Title is too short',
+      issue: `Title is only ${titleLen} characters (under 35 chars).`,
+      solution: 'Expand title to 40–60 characters to capture higher search intent.'
+    });
+  } else if (titleLen > 65) {
+    seoScore += 12;
+    issues.push({
+      type: 'warning',
+      title: 'Title will be truncated by Google',
+      issue: `Title is ${titleLen} characters (over 60 chars).`,
+      solution: 'Trim title to 60 characters or fewer so the full title displays without truncation.'
+    });
+  } else {
+    seoScore += 25;
+    passed.push({
+      title: 'SEO Title Length',
+      detail: `Optimal length (${titleLen} characters) within recommended 40–60 characters.`
+    });
+  }
+
+  // 2. Meta Description / Excerpt Check
+  const descLen = (description || '').trim().length;
+  if (descLen === 0) {
+    issues.push({
+      type: 'error',
+      title: 'Missing Meta Description & Excerpt',
+      issue: 'No meta description or excerpt provided.',
+      solution: 'Write a compelling summary between 120 and 160 characters.'
+    });
+  } else if (descLen < 100) {
+    seoScore += 10;
+    issues.push({
+      type: 'warning',
+      title: 'Description is too short',
+      issue: `Description is only ${descLen} characters (ideal: 120–160 chars).`,
+      solution: 'Add more descriptive details to reach at least 120 characters.'
+    });
+  } else if (descLen > 165) {
+    seoScore += 12;
+    issues.push({
+      type: 'warning',
+      title: 'Description is too long',
+      issue: `Description is ${descLen} characters (over 160 chars).`,
+      solution: 'Shorten description to under 160 characters so Google does not cut it off with an ellipsis.'
+    });
+  } else {
+    seoScore += 25;
+    passed.push({
+      title: 'Meta Description & Excerpt Length',
+      detail: `Optimal length (${descLen} characters) within 120–160 characters.`
+    });
+  }
+
+  // 3. Slug check
+  if (!slug || slug.trim().length === 0) {
+    issues.push({
+      type: 'error',
+      title: 'Missing URL Slug',
+      issue: 'No URL slug generated for this post.',
+      solution: 'Provide a lowercase, hyphen-separated slug.'
+    });
+  } else if (slug.length > 75) {
+    seoScore += 5;
+    issues.push({
+      type: 'warning',
+      title: 'URL Slug is too long',
+      issue: `Slug has ${slug.length} characters (over 75 chars).`,
+      solution: 'Keep slug concise and focused on primary target keywords.'
+    });
+  } else {
+    seoScore += 15;
+    passed.push({
+      title: 'URL Slug Structure',
+      detail: 'Clean, lowercase, and search-engine friendly.'
+    });
+  }
+
+  // 4. Content Word Count
+  if (wordCount < 300) {
+    seoScore += Math.round((wordCount / 300) * 8);
+    issues.push({
+      type: 'warning',
+      title: 'Low Word Count',
+      issue: `Article has ${wordCount} words (recommended: 600+ words).`,
+      solution: 'Add in-depth analysis, FAQs, and explanations to build topical authority.'
+    });
+  } else if (wordCount < 600) {
+    seoScore += 14;
+    passed.push({
+      title: 'Acceptable Word Count',
+      detail: `${wordCount} words. Consider expanding for competitive search terms.`
+    });
+  } else {
+    seoScore += 20;
+    passed.push({
+      title: 'Comprehensive Content Depth',
+      detail: `Great depth with ${wordCount} words, satisfying search depth.`
+    });
+  }
+
+  // 5. Headings structure
+  const hasH2 = /<h2[^>]*>/i.test(content || '');
+  const hasH3 = /<h3[^>]*>/i.test(content || '');
+  if (!hasH2 && wordCount > 200) {
+    issues.push({
+      type: 'warning',
+      title: 'Missing H2 Subheadings',
+      issue: 'No H2 subheadings found in article body.',
+      solution: 'Break content into clear sections using H2 headings for readability and ranking.'
+    });
+  } else if (hasH2) {
+    seoScore += 10;
+    passed.push({
+      title: 'Heading Hierarchy',
+      detail: `Content uses H2 ${hasH3 ? 'and H3 ' : ''}headings to organize thoughts.`
+    });
+  }
+
+  // 6. Featured Image & Alt
+  if (!featuredImage) {
+    issues.push({
+      type: 'warning',
+      title: 'Missing Featured Media',
+      issue: 'No featured image selected for article thumbnail.',
+      solution: 'Upload a high-resolution hero image with descriptive alt text.'
+    });
+  } else {
+    seoScore += 5;
+    passed.push({
+      title: 'Featured Image Set',
+      detail: 'Hero image ready for SERP rich snippet and social cards.'
+    });
+  }
+
+  // 7. Keyword Cannibalization Detection (Checked against published articles)
+  const currKeywords = extractTopicalKeywords((title || '') + ' ' + (slug || ''));
+  if (currKeywords.words.length >= 2 && Array.isArray(existingPosts) && existingPosts.length > 0) {
+    const conflicts = [];
+
+    for (const post of existingPosts) {
+      // Skip self
+      if (currentPostId && (post._id === currentPostId || post.id === currentPostId)) continue;
+      if (currentPostId && post.slug && slug && post.slug === slug) continue;
+
+      const otherKeywords = extractTopicalKeywords((post.title || '') + ' ' + (post.slug || ''));
+      const matchingWords = currKeywords.words.filter(w => otherKeywords.words.includes(w));
+      const matchingPhrases = currKeywords.phrases.filter(p => otherKeywords.phrases.includes(p));
+
+      const matchWeight = matchingWords.length + (matchingPhrases.length * 1.6);
+      const minTerms = Math.max(1, Math.min(currKeywords.words.length, otherKeywords.words.length));
+      const overlapPercent = Math.min(95, Math.round((matchWeight / (minTerms + (matchingPhrases.length > 0 ? 1 : 0))) * 100));
+
+      if (overlapPercent >= 45 || (matchingPhrases.length >= 1 && matchingWords.length >= 2) || matchingWords.length >= 3) {
+        conflicts.push({
+          id: post._id || post.id,
+          title: post.title,
+          slug: post.slug,
+          url: `https://www.pranaair.com/blog/${post.slug}`,
+          matchingKeywords: Array.from(new Set([...matchingPhrases, ...matchingWords])),
+          overlapScore: Math.max(48, overlapPercent)
+        });
+      }
+    }
+
+    if (conflicts.length > 0) {
+      conflicts.sort((a, b) => b.overlapScore - a.overlapScore);
+      const topConflict = conflicts[0];
+      const isHighRisk = topConflict.overlapScore >= 68;
+
+      // If user directed rel="canonical" to the master conflicting article, conflict is resolved per Google guidelines!
+      const isCanonicalizedToMaster = canonicalMode === 'custom' && canonicalUrl && (
+        canonicalUrl.trim().toLowerCase() === topConflict.url.toLowerCase() ||
+        canonicalUrl.trim().toLowerCase().includes(topConflict.slug.toLowerCase())
+      );
+
+      if (isCanonicalizedToMaster) {
+        seoScore += 10;
+        passed.push({
+          title: 'Cannibalization Resolved via Canonical Tag',
+          detail: `Rel="canonical" directed to master article "${topConflict.title}". Google will attribute ranking signals to the primary URL.`
+        });
+      } else {
+        seoScore = Math.max(0, seoScore - (isHighRisk ? 15 : 8));
+
+        issues.push({
+          type: isHighRisk ? 'error' : 'warning',
+          title: `Keyword Cannibalization Detected (${topConflict.overlapScore}% overlap)`,
+          isCannibalization: true,
+          cannibalization: {
+            primaryConflict: topConflict,
+            allConflicts: conflicts,
+            overlappingKeywords: topConflict.matchingKeywords,
+            targetQuery: topConflict.matchingKeywords.slice(0, 3).join(' + ')
+          },
+          issue: `Direct query overlap on [${topConflict.matchingKeywords.slice(0, 3).join(', ')}] with existing published post: "${topConflict.title}".`,
+          proof: {
+            currentQuery: title || slug,
+            conflictingTitle: topConflict.title,
+            conflictingUrl: topConflict.url,
+            overlappingTerms: topConflict.matchingKeywords,
+            overlapPercent: topConflict.overlapScore,
+            riskAnalysis: `Both articles target search intent around "${topConflict.matchingKeywords.join(' ')}". Google will split crawl priority, backlinks, and CTR between both articles.`
+          },
+          solution: `Differentiate search intent with long-tail angles, set a Canonical Tag pointing to "${topConflict.title}", or merge into the existing URL.`
+        });
+      }
+    } else {
+      seoScore += 10;
+      passed.push({
+        title: 'Zero Keyword Cannibalization (Topical Exclusivity)',
+        detail: `Verified against ${existingPosts.length} published articles. No competing titles, slugs, or shared search queries detected for "${currKeywords.words.slice(0, 4).join(', ')}".`
+      });
+    }
+  }
+
+  // 8. Canonical Tag Validation
+  const effectiveCanonical = canonicalMode === 'custom' && canonicalUrl.trim()
+    ? canonicalUrl.trim()
+    : `https://www.pranaair.com/blog/${slug || 'post-slug'}`;
+
+  if (canonicalMode === 'custom') {
+    if (!canonicalUrl.trim()) {
+      issues.push({
+        type: 'warning',
+        title: 'Empty Custom Canonical URL',
+        issue: 'Custom canonical mode is enabled but no target URL is specified.',
+        solution: 'Provide a fully qualified URL (e.g. https://www.pranaair.com/blog/master-article) or switch back to Self-Referential.'
+      });
+    } else if (!/^https?:\/\//i.test(canonicalUrl.trim())) {
+      issues.push({
+        type: 'warning',
+        title: 'Invalid Canonical URL Format',
+        issue: `Canonical URL "${canonicalUrl}" is missing https:// protocol.`,
+        solution: 'Use a complete absolute URL beginning with https://.'
+      });
+    } else {
+      seoScore += 5;
+      passed.push({
+        title: 'Custom Canonical Tag Active',
+        detail: `Consolidating indexing signals to master URL: ${canonicalUrl.trim()}`
+      });
+    }
+  } else {
+    seoScore += 5;
+    passed.push({
+      title: 'Valid Self-Referential Canonical Tag',
+      detail: `Default rel="canonical" tag correctly points to this post (${effectiveCanonical}).`
+    });
+  }
+
+  // Readability checks with detailed diagnostic metrics
+  if (wordCount > 30) {
+    if (fleschScore < 55) {
+      issues.push({
+        type: 'warning',
+        title: 'Complex Reading Level',
+        issue: `Readability score is ${fleschScore}/100 (Grade ${gradeLevel} - Difficult/Academic). Most online readers disengage on content above Grade 8.`,
+        solution: 'Aim for Grade 7–8 level (Flesch 65–75+). Break down sentences into 12–16 words and replace dense academic jargon with conversational English.'
+      });
+    }
+
+    if (wordsPerSentence > 18 || longSentences.length > 3) {
+      issues.push({
+        type: 'warning',
+        title: 'Average Sentence Length Too High',
+        issue: `Average sentence length is ${wordsPerSentence} words (optimal is 12–16 words). Found ${longSentences.length} sentences exceeding 22 words.`,
+        solution: 'Split compound sentences joined by "and", "which", "because", or semicolons into 2 shorter, punchy sentences.'
+      });
+    }
+
+    if (complexWordPct > 15) {
+      issues.push({
+        type: 'warning',
+        title: 'High Jargon & Multi-Syllable Density',
+        issue: `${complexWordPct}% of words contain 3 or more syllables, increasing cognitive reading friction.`,
+        solution: 'Substitute complex multi-syllable terms with direct plain English equivalents (e.g. "accumulate" → "build up", "concentrations" → "levels", "utilize" → "use").'
+      });
+    }
+
+    if (fleschScore >= 55 && wordsPerSentence <= 18 && complexWordPct <= 15) {
+      passed.push({
+        title: 'Content Readability & Sentence Flow',
+        detail: `Flesch Reading Ease ${fleschScore}/100 (Grade ${gradeLevel}), avg ${wordsPerSentence} words/sentence, accessible to general readers.`
+      });
+    }
+  }
+
+  // 9. Primary Target Keyword Evaluation & SEO Score Impact
+  const cleanKw = (primaryKeyword || '').trim().toLowerCase();
+  let keywordInTitle = false;
+  let keywordInSlug = false;
+  let keywordInDesc = false;
+  let keywordMatches = 0;
+  let keywordDensity = 0;
+
+  if (cleanKw) {
+    const titleLower = (title || '').toLowerCase();
+    const descLower = (description || '').toLowerCase();
+    const slugLower = (slug || '').toLowerCase();
+    const slugKw = cleanKw.replace(/\s+/g, '-');
+
+    // A. Check Keyword in SEO Title (up to 12 pts)
+    keywordInTitle = titleLower.includes(cleanKw);
+    if (keywordInTitle) {
+      const isFrontLoaded = titleLower.indexOf(cleanKw) < 25;
+      seoScore += isFrontLoaded ? 12 : 8;
+      passed.push({
+        title: 'Target Keyword in Title',
+        detail: `Primary keyword "${primaryKeyword}" found in SEO Title${isFrontLoaded ? ' (front-loaded)' : ''}.`
+      });
+    } else {
+      issues.push({
+        type: 'warning',
+        title: 'Target Keyword Missing from Title',
+        issue: `Target keyword "${primaryKeyword}" was not found in the SEO Title.`,
+        solution: `Place "${primaryKeyword}" near the beginning of your SEO title.`
+      });
+    }
+
+    // B. Check Keyword in URL Slug (up to 8 pts)
+    const kwWords = cleanKw.split(/\s+/).filter(w => w.length > 2);
+    keywordInSlug = slugLower.includes(slugKw) || (kwWords.length > 0 && kwWords.every(w => slugLower.includes(w)));
+    if (keywordInSlug) {
+      seoScore += 8;
+      passed.push({
+        title: 'Target Keyword in URL Slug',
+        detail: `URL slug contains "${primaryKeyword}".`
+      });
+    } else {
+      issues.push({
+        type: 'warning',
+        title: 'Target Keyword Missing from Slug',
+        issue: `Target keyword "${primaryKeyword}" is missing from the URL slug.`,
+        solution: `Include "${slugKw}" in the slug for stronger keyword relevance.`
+      });
+    }
+
+    // C. Check Keyword in Meta Description (up to 8 pts)
+    keywordInDesc = descLower.includes(cleanKw);
+    if (keywordInDesc) {
+      seoScore += 8;
+      passed.push({
+        title: 'Target Keyword in Meta Description',
+        detail: `Primary keyword "${primaryKeyword}" appears in the search snippet.`
+      });
+    } else {
+      issues.push({
+        type: 'warning',
+        title: 'Target Keyword Missing from Description',
+        issue: `Target keyword "${primaryKeyword}" is missing from the meta description.`,
+        solution: `Include "${primaryKeyword}" naturally in your meta description snippet.`
+      });
+    }
+
+    // D. Check Keyword Density in Content Body (up to 8 pts)
+    try {
+      const kwRegex = new RegExp('\\b' + cleanKw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi');
+      const matches = plainText.match(kwRegex) || [];
+      keywordMatches = matches.length;
+      keywordDensity = wordCount > 0 ? Math.round((keywordMatches / wordCount) * 1000) / 10 : 0;
+    } catch {
+      keywordMatches = 0;
+      keywordDensity = 0;
+    }
+
+    if (keywordMatches === 0 && wordCount > 50) {
+      issues.push({
+        type: 'warning',
+        title: 'Target Keyword Missing from Article Body',
+        issue: `Target keyword "${primaryKeyword}" does not appear anywhere in the article text.`,
+        solution: `Mention "${primaryKeyword}" naturally in your article body and introduction.`
+      });
+    } else if (keywordDensity > 2.3) {
+      issues.push({
+        type: 'error',
+        title: 'Keyword Stuffing Detected (Over-Optimization)',
+        issue: `Keyword density is ${keywordDensity}% (${keywordMatches} times). Google algorithms flag repetition above 2.2% as unnatural keyword stuffing.`,
+        solution: 'Replace repetitive keyword occurrences with Latent Semantic Indexing (LSI) synonyms (e.g. synthetic fibers, airborne plastic particulate). Aim for 0.8%–1.8% density.'
+      });
+    } else if (wordCount > 50) {
+      seoScore += 8;
+      passed.push({
+        title: 'Optimal Keyword Density (No Stuffing)',
+        detail: `Found ${keywordMatches} times (${keywordDensity}% density, ideal range 0.4%–2.0%).`
+      });
+    }
+  } else {
+    issues.push({
+      type: 'warning',
+      title: 'No Target Keyword Defined',
+      issue: 'No primary target keyword has been set for this article.',
+      solution: 'Specify a primary target keyword above or click "✨ AI Suggest" to benchmark on-page SEO targeting.'
+    });
+  }
+
+  // 10. Google E-E-A-T (Experience, Expertise, Authoritativeness, Trustworthiness)
+  const eeatPatterns = [
+    /\b(WHO|World Health Organization)\b/i,
+    /\b(EPA|Environmental Protection Agency)\b/i,
+    /\b(CDC|NIH|PubMed|Lancet|Nature|ScienceDirect|UNEP)\b/i,
+    /\b(peer-reviewed|journal|study published|clinical trial|researchers at)\b/i,
+    /https?:\/\/[^\s"']+\.(gov|edu|org|who\.int|nih\.gov|epa\.gov)/i
+  ];
+  const matchedEeat = eeatPatterns.filter(p => p.test(content || ''));
+  const hasEeatCitations = matchedEeat.length >= 1;
+
+  if (wordCount > 150) {
+    if (hasEeatCitations) {
+      seoScore += 6;
+      passed.push({
+        title: 'Google E-E-A-T Scientific Attribution',
+        detail: 'Content references recognized scientific research or environmental health institutions, reinforcing Google E-E-A-T trust signals.'
+      });
+    } else {
+      issues.push({
+        type: 'warning',
+        title: 'E-E-A-T Gap: Missing Scientific Citations',
+        issue: 'Article discusses environmental & air quality claims without citing authoritative research or standards (e.g., WHO, EPA, Lancet, or peer-reviewed studies).',
+        solution: 'Cite peer-reviewed studies, official WHO/EPA air quality thresholds, or institutional measurements to strengthen Google E-E-A-T.'
+      });
+    }
+  }
+
+  // 11. Google YMYL (Your Money or Your Life) Health & Safety Compliance
+  const ymylHealthPattern = /\b(health|respiratory|lungs?|cancer|blood|toxic(ity)?|cardiovascular|disease|asthma|inhalation|pulmonary|tissue)\b/i;
+  const discussesHealth = ymylHealthPattern.test(plainText);
+  const disclaimerPattern = /\b(disclaimer|educational purposes|consult a (doctor|physician|medical|healthcare)|not (intended as|a substitute for) medical advice)\b/i;
+  const hasYmylDisclaimer = disclaimerPattern.test(plainText);
+
+  if (discussesHealth && wordCount > 200) {
+    if (hasYmylDisclaimer) {
+      seoScore += 6;
+      passed.push({
+        title: 'Google YMYL Health Disclaimer Present',
+        detail: 'Includes a clear educational & informational disclaimer for environmental health topics, complying with Google YMYL quality standards.'
+      });
+    } else {
+      issues.push({
+        type: 'warning',
+        title: 'YMYL Compliance: Health & Medical Disclaimer Missing',
+        issue: 'Content discusses health, pulmonary, or toxicity impacts. Google YMYL guidelines require clear disclaimers stating content is for educational purposes and not clinical medical advice.',
+        solution: 'Add an informational/health disclaimer box at the bottom of the article to meet Google YMYL criteria.'
+      });
+    }
+  }
+
+  seoScore = Math.min(100, Math.max(0, Math.round(seoScore)));
+
+  let seoColor = '#ef4444';
+  let seoStatus = 'Poor';
+  if (seoScore >= 80) {
+    seoColor = '#16a34a';
+    seoStatus = 'Good';
+  } else if (seoScore >= 50) {
+    seoColor = '#f59e0b';
+    seoStatus = 'Needs Work';
+  }
+
+  return {
+    seoScore,
+    seoColor,
+    seoStatus,
+    fleschScore,
+    gradeLevel,
+    readabilityStatus,
+    readabilityColor,
+    readabilityLabel,
+    wordCount,
+    sentenceCount,
+    issues,
+    passed,
+    keywordInTitle,
+    keywordInSlug,
+    keywordInDesc,
+    keywordMatches,
+    keywordDensity,
+    primaryKeyword
+  };
+}
+
 function BlogEditorContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const postId = searchParams.get('id'); // Get the post ID if we are editing
+
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [isSlugLocked, setIsSlugLocked] = useState(true);
+  const [showMetaDrawer, setShowMetaDrawer] = useState(false);
+  const [serpViewMode, setSerpViewMode] = useState('desktop');
+  const [showAuditDrawer, setShowAuditDrawer] = useState(false);
+  const [auditTab, setAuditTab] = useState('issues');
   const [content, setContent] = useState('');
   const [excerpt, setExcerpt] = useState('');
   const [featuredImage, setFeaturedImage] = useState('');
@@ -86,8 +706,30 @@ function BlogEditorContent() {
   const [newTag, setNewTag] = useState('');
 
   // SEO State
+  const [primaryKeyword, setPrimaryKeyword] = useState('');
   const [seoTitle, setSeoTitle] = useState('');
   const [seoDescription, setSeoDescription] = useState('');
+  const [canonicalUrl, setCanonicalUrl] = useState('');
+  const [canonicalMode, setCanonicalMode] = useState('self');
+  const [copiedCanonical, setCopiedCanonical] = useState(false);
+  const [existingPosts, setExistingPosts] = useState([]);
+
+  const handleCopyCanonicalTag = (textToCopy) => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        setCopiedCanonical(true);
+        setTimeout(() => setCopiedCanonical(false), 2200);
+      }).catch(err => {
+        console.error('Failed to copy canonical tag:', err);
+      });
+    }
+  };
+
+  const effectiveCanonicalUrl = canonicalMode === 'custom' && canonicalUrl.trim()
+    ? canonicalUrl.trim()
+    : `https://www.pranaair.com/blog/${slug || 'post-slug'}`;
+
+  const canonicalTagCode = `<link rel="canonical" href="${effectiveCanonicalUrl}" />`;
 
   // Promotion State
   const [promoImage, setPromoImage] = useState('');
@@ -96,6 +738,7 @@ function BlogEditorContent() {
   const [promoPlacement, setPromoPlacement] = useState('sidebar');
   const [promoEndDate, setPromoEndDate] = useState('');
   const [promoActive, setPromoActive] = useState(false);
+  const [aiLoading, setAiLoading] = useState('');
 
   // Multilingual states
   const [selectedLang, setSelectedLang] = useState('en');
@@ -138,13 +781,22 @@ function BlogEditorContent() {
     }));
   };
 
-  const onExcerptChange = (val) => {
+  // Unified description & excerpt handler to keep them 100% combined
+  const onCombinedDescriptionChange = (val) => {
     setExcerpt(val);
+    setSeoDescription(val);
     setEditorData(prev => ({
       ...prev,
-      [selectedLang]: { ...prev[selectedLang], excerpt: val }
+      [selectedLang]: {
+        ...prev[selectedLang],
+        excerpt: val,
+        seoDescription: val
+      }
     }));
   };
+
+  const onExcerptChange = onCombinedDescriptionChange;
+  const onSeoDescriptionChange = onCombinedDescriptionChange;
 
   const onSeoTitleChange = (val) => {
     setSeoTitle(val);
@@ -154,13 +806,27 @@ function BlogEditorContent() {
     }));
   };
 
-  const onSeoDescriptionChange = (val) => {
-    setSeoDescription(val);
-    setEditorData(prev => ({
-      ...prev,
-      [selectedLang]: { ...prev[selectedLang], seoDescription: val }
-    }));
-  };
+  // Real-time SEO and Readability Score Calculation with Cannibalization check
+  const seoMetrics = useMemo(() => {
+    return analyzeReadabilityAndSeo({
+      title: seoTitle || title,
+      slug,
+      description: seoDescription || excerpt,
+      content,
+      featuredImage,
+      featuredImageAlt,
+      existingPosts,
+      currentPostId: postId,
+      canonicalUrl,
+      canonicalMode,
+      primaryKeyword
+    });
+  }, [seoTitle, title, slug, seoDescription, excerpt, content, featuredImage, featuredImageAlt, existingPosts, postId, canonicalUrl, canonicalMode, primaryKeyword]);
+
+  // Separate general SEO/readability issues from Keyword Cannibalization issues
+  const generalIssues = useMemo(() => seoMetrics.issues.filter(i => !i.isCannibalization), [seoMetrics.issues]);
+  const cannibalizationIssue = useMemo(() => seoMetrics.issues.find(i => i.isCannibalization), [seoMetrics.issues]);
+  const hasCannibalization = !!cannibalizationIssue;
 
   const handleLangChange = (newLang) => {
     // 1. Sync current state back to editorData to ensure it is up to date
@@ -211,10 +877,6 @@ function BlogEditorContent() {
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const [authChecked, setAuthChecked] = useState(false);
   const [quillLoaded, setQuillLoaded] = useState(false);
-
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const postId = searchParams.get('id'); // Get the post ID if we are editing
 
   const editorRef = useRef(null);
 
@@ -354,6 +1016,16 @@ function BlogEditorContent() {
               }
             })
             .catch(console.error);
+
+          // Fetch existing posts for keyword cannibalization checks
+          fetch('/api/posts?limit=100')
+            .then(r => r.json())
+            .then(data => {
+              if (data.success && Array.isArray(data.data)) {
+                setExistingPosts(data.data);
+              }
+            })
+            .catch(console.error);
         }
       } catch (err) {
         console.error(err);
@@ -431,6 +1103,17 @@ function BlogEditorContent() {
           setCategories(post.categories || []);
           setTags(post.tags || []);
 
+          const loadedKeyword = post.focusKeyword || post.primaryKeyword || post.seo?.focusKeyword || post.seo?.primaryKeyword || '';
+          setPrimaryKeyword(loadedKeyword);
+
+          const loadedCanonical = post.seo?.canonicalUrl || '';
+          setCanonicalUrl(loadedCanonical);
+          if (loadedCanonical && loadedCanonical !== `https://www.pranaair.com/blog/${post.slug}`) {
+            setCanonicalMode('custom');
+          } else {
+            setCanonicalMode('self');
+          }
+
           if (post.promotion) {
             setPromoImage(post.promotion.imageUrl || '');
             setPromoText(post.promotion.text || '');
@@ -475,6 +1158,121 @@ function BlogEditorContent() {
     setTimeout(() => {
       setNotification({ show: false, message: '', type: '' });
     }, 4000);
+  };
+
+  const handleAiFixSeo = async (actionType, customInstruction = '') => {
+    setAiLoading(actionType);
+    try {
+      const res = await fetch('/api/ai/fix-seo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: actionType,
+          title: seoTitle || title,
+          slug,
+          description: seoDescription || excerpt,
+          content: content || '',
+          language: selectedLang,
+          primaryKeyword: primaryKeyword.trim(),
+          competingArticle: cannibalizationIssue?.cannibalization?.primaryConflict || null,
+          overlappingKeywords: cannibalizationIssue?.cannibalization?.overlappingKeywords || [],
+          needsReadabilityFix: seoMetrics.fleschScore < 55,
+          instruction: customInstruction
+        })
+      });
+
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        throw new Error('Server response was not valid JSON. Please try again.');
+      }
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Claude AI optimization failed.');
+      }
+
+      const result = data.data || data;
+
+      if (actionType === 'suggest_keyword' && (result.primaryKeyword || result.keyword)) {
+        const suggestedKw = (result.primaryKeyword || result.keyword).trim();
+        setPrimaryKeyword(suggestedKw);
+        showNotification(`Claude suggested target keyword: "${suggestedKw}" (${result.searchIntent || 'High intent'})`, 'success');
+        return;
+      }
+
+      if (result.primaryKeyword && !primaryKeyword.trim()) {
+        setPrimaryKeyword(result.primaryKeyword.trim());
+      }
+
+      if (result.title) {
+        setTitle(result.title);
+        setSeoTitle(result.title);
+        setEditorData(prev => ({
+          ...prev,
+          [selectedLang]: {
+            ...prev[selectedLang],
+            title: result.title,
+            seoTitle: result.title
+          }
+        }));
+      }
+
+      if (result.slug) {
+        setSlug(result.slug);
+        setIsSlugLocked(false);
+      }
+
+      if (result.description) {
+        setExcerpt(result.description);
+        setSeoDescription(result.description);
+        setEditorData(prev => ({
+          ...prev,
+          [selectedLang]: {
+            ...prev[selectedLang],
+            excerpt: result.description,
+            seoDescription: result.description
+          }
+        }));
+      }
+
+      if (result.content) {
+        setContent(result.content);
+        if (editorRef.current) {
+          editorRef.current.setContent(result.content);
+        }
+        setEditorData(prev => ({
+          ...prev,
+          [selectedLang]: {
+            ...prev[selectedLang],
+            content: result.content
+          }
+        }));
+      }
+
+      if (actionType === 'differentiate_cannibalization') {
+        showNotification(`Claude differentiated topic: ${result.differentiatedAngle || 'New angle applied! Overlap eliminated.'}`, 'success');
+      } else if (actionType === 'fix_all') {
+        showNotification('Claude optimized SERP metadata and updated main blog body with target keyword!', 'success');
+      } else if (actionType === 'optimize_content' || actionType === 'fix_content_keyword') {
+        showNotification(`Claude strategically placed "${primaryKeyword}" in the intro, headings & body!`, 'success');
+      } else if (actionType === 'fix_eeat_ymyl') {
+        showNotification('Claude added WHO/EPA scientific citations, resolved stuffing, and embedded YMYL disclaimer!', 'success');
+      } else if (actionType === 'fix_readability') {
+        showNotification('Claude simplified long sentences and optimized readability in post body!', 'success');
+      } else if (actionType === 'fix_title') {
+        showNotification('Claude optimized Title for 45–60 char Google SERP limits!', 'success');
+      } else if (actionType === 'fix_description') {
+        showNotification('Claude generated 125–155 char high-CTR Meta Description!', 'success');
+      } else if (actionType === 'fix_slug') {
+        showNotification('Claude generated a clean, keyword-rich URL slug!', 'success');
+      }
+    } catch (err) {
+      console.error('Claude AI Fix Error:', err);
+      showNotification(err.message || 'Claude AI optimization request failed.', 'error');
+    } finally {
+      setAiLoading('');
+    }
   };
 
   const handleEditorChange = (newContent, editor) => {
@@ -609,7 +1407,8 @@ function BlogEditorContent() {
           seo: {
             title: t.seoTitle || t.title,
             description: t.seoDescription || t.excerpt || t.title,
-            keywords: [...categories, ...tags]
+            keywords: [...categories, ...tags],
+            canonicalUrl: canonicalMode === 'custom' ? canonicalUrl.trim() : ''
           }
         };
       }
@@ -626,10 +1425,15 @@ function BlogEditorContent() {
       author,
       categories,
       tags,
+      primaryKeyword: primaryKeyword.trim(),
+      focusKeyword: primaryKeyword.trim(),
       seo: {
         title: enData.seoTitle || enData.title,
         description: enData.seoDescription || enData.excerpt || enData.title,
         keywords: [...categories, ...tags],
+        primaryKeyword: primaryKeyword.trim(),
+        focusKeyword: primaryKeyword.trim(),
+        canonicalUrl: canonicalMode === 'custom' ? canonicalUrl.trim() : ''
       },
       promotion: {
         imageUrl: promoImage,
@@ -795,10 +1599,10 @@ function BlogEditorContent() {
       && data.title === editorData.en.title
       && data.content === editorData.en.content;
 
-    if (isEnglishBase) return { key: 'done', text: 'Original' };
-    if (hasContent && sameAsEnglish) return { key: 'same', text: 'Same as English' };
-    if (hasContent) return { key: 'done', text: 'Translated' };
-    return { key: 'pending', text: 'Not written' };
+    if (isEnglishBase) return { key: 'done', text: 'Original', symbol: '●' };
+    if (hasContent && sameAsEnglish) return { key: 'same', text: 'Same as English', symbol: '●' };
+    if (hasContent) return { key: 'done', text: 'Translated', symbol: '✓' };
+    return { key: 'pending', text: 'Not written', symbol: '○' };
   };
 
   if (!authChecked) {
@@ -852,122 +1656,149 @@ function BlogEditorContent() {
       <div className="editor-layout">
         {/* Main Work Area */}
         <div className="main-editor-pane">
-          {/* Always-visible language panel — replaces the old dropdown +
-              popup. Every language is a card you click directly to switch
-              to it; no modal in the way. */}
-          <div className="lang-panel">
-            <div className="lang-panel-header">
-              <h3 className="lang-panel-title">Auto Translate &amp; Languages</h3>
-              <button
-                type="button"
-                onClick={() => { setTranslateResult(null); setTranslateProgress({}); setShowTranslateModal(true); }}
-                className="translate-btn"
-              >
-                Auto Translate
-              </button>
-            </div>
+          {/* Ultra-compact single-row language strip */}
+          <div className="lang-strip">
+            <div className="lang-strip-left">
+              <div className="lang-strip-label" title="Languages">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                <span>Lang:</span>
+              </div>
 
-            <div className="lang-panel-grid">
-              {allLanguages.map(lang => {
-                const isActive = selectedLang === lang.code;
-                const isTranslationLang = lang.group === 'Translations';
-                const hasContent = (lang.code === 'en' ? title : editorData[lang.code]?.title)?.trim() !== '';
-                const status = getLangStatus(lang);
-                const busy = langActionBusy[lang.code];
+              <div className="lang-pills-wrap">
+                {allLanguages.map((lang) => {
+                  const isActive = selectedLang === lang.code;
+                  const isTranslationLang = lang.group === 'Translations';
+                  const hasContent = (lang.code === 'en' ? title : editorData[lang.code]?.title)?.trim() !== '';
+                  const status = getLangStatus(lang);
+                  const busy = langActionBusy[lang.code];
+                  const isFirstTranslation = lang.code === 'hi';
 
-                return (
-                  <div key={lang.code} className={`lang-card${isActive ? ' active' : ''}`}>
-                    <button
-                      type="button"
-                      onClick={() => handleLangChange(lang.code)}
-                      className="lang-card-main"
-                      title={lang.label}
-                    >
-                      <span className="lang-card-name">{lang.code.toUpperCase()}</span>
-                      <span className={`lang-status-badge ${status.key}`}>{status.text}</span>
-                    </button>
-                    {isTranslationLang && hasContent && (
-                      <div className="lang-card-actions">
+                  return (
+                    <React.Fragment key={lang.code}>
+                      {isFirstTranslation && <span className="lang-pills-separator" />}
+                      <div
+                        className={`lang-pill ${isActive ? 'active' : ''} ${status.key}`}
+                        title={`${lang.label} (${status.text})`}
+                      >
                         <button
                           type="button"
-                          className="lang-icon-btn"
-                          title={`Re-translate ${lang.label}`}
-                          disabled={!!busy}
-                          onClick={(e) => { e.stopPropagation(); handleRetranslateOne(lang.code); }}
+                          onClick={() => handleLangChange(lang.code)}
+                          className="lang-pill-main"
                         >
-                          {busy === 'retranslating' ? (
-                            <span className="translate-spinner small" />
-                          ) : (
-                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                          )}
+                          <span className="lang-pill-name">{lang.short || lang.code.toUpperCase()}</span>
+                          <span className={`lang-symbol ${status.key}`}>{status.symbol}</span>
                         </button>
-                        <button
-                          type="button"
-                          className="lang-icon-btn danger"
-                          title={`Delete ${lang.label} translation`}
-                          disabled={!!busy}
-                          onClick={(e) => { e.stopPropagation(); handleDeleteTranslation(lang.code); }}
-                        >
-                          {busy === 'deleting' ? (
-                            <span className="translate-spinner small" />
-                          ) : (
-                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg>
-                          )}
-                        </button>
+
+                        {isTranslationLang && hasContent && (
+                          <div className="lang-pill-actions">
+                            <button
+                              type="button"
+                              className="lang-micro-btn"
+                              title={`Re-translate ${lang.label}`}
+                              disabled={!!busy}
+                              onClick={(e) => { e.stopPropagation(); handleRetranslateOne(lang.code); }}
+                            >
+                              {busy === 'retranslating' ? (
+                                <span className="translate-spinner mini" />
+                              ) : (
+                                '↻'
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              className="lang-micro-btn danger"
+                              title={`Delete ${lang.label} translation`}
+                              disabled={!!busy}
+                              onClick={(e) => { e.stopPropagation(); handleDeleteTranslation(lang.code); }}
+                            >
+                              {busy === 'deleting' ? (
+                                <span className="translate-spinner mini" />
+                              ) : (
+                                '×'
+                              )}
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
             </div>
+
+            <button
+              type="button"
+              onClick={() => { setTranslateResult(null); setTranslateProgress({}); setShowTranslateModal(true); }}
+              className="btn-translate-compact"
+              title="Auto Translate post to other languages"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+              <span>Auto Translate</span>
+            </button>
           </div>
 
           <div className="main-editor-card">
-            <div className="form-group">
-              <label className="form-label">Post Title ({selectedLang.toUpperCase()})</label>
+            {/* Compact Title Row with expandable Slug/Excerpt Drawer trigger */}
+            <div className="editor-title-row">
               <input
                 type="text"
-                className="input-text"
-                placeholder={`Enter ${selectedLang === 'en' ? 'English' : 'translated'} title here...`}
+                className="editor-title-input"
+                placeholder={`Post title (${selectedLang.toUpperCase()})...`}
                 value={title}
                 onChange={(e) => onTitleChange(e.target.value)}
               />
+              <button
+                type="button"
+                className={`btn-meta-toggle ${showMetaDrawer ? 'open' : ''}`}
+                onClick={() => setShowMetaDrawer(!showMetaDrawer)}
+                title="Toggle URL Slug and Excerpt drawer"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                <span className="meta-toggle-slug">/{slug || 'slug'}</span>
+                <span className="meta-toggle-chevron">{showMetaDrawer ? '▲' : '▼'}</span>
+              </button>
             </div>
 
-            <div className="form-group">
-              <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>URL Slug</span>
-                <button
-                  type="button"
-                  onClick={() => setIsSlugLocked(!isSlugLocked)}
-                  style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: '0.8125rem' }}
-                >
-                  {isSlugLocked ? 'Edit Slug' : 'Lock Slug'}
-                </button>
-              </label>
-              <input
-                type="text"
-                className="input-text"
-                value={slug}
-                disabled={isSlugLocked}
-                onChange={(e) => setSlug(e.target.value)}
-                placeholder="url-friendly-slug-will-appear-here"
-              />
-            </div>
+            {/* Expandable Meta Drawer for Slug & Excerpt right below title */}
+            {showMetaDrawer && (
+              <div className="editor-meta-drawer">
+                <div className="meta-drawer-grid">
+                  <div className="form-group">
+                    <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>URL Slug</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsSlugLocked(!isSlugLocked)}
+                        style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}
+                      >
+                        {isSlugLocked ? 'Edit Slug' : 'Lock Slug'}
+                      </button>
+                    </label>
+                    <input
+                      type="text"
+                      className="input-text"
+                      style={{ padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
+                      value={slug}
+                      disabled={isSlugLocked}
+                      onChange={(e) => setSlug(e.target.value)}
+                      placeholder="url-friendly-slug"
+                    />
+                  </div>
 
-            <div className="form-group">
-              <label className="form-label">Excerpt / Summary ({selectedLang.toUpperCase()})</label>
-              <input
-                type="text"
-                className="input-text"
-                placeholder={`Brief overview of the article in ${selectedLang.toUpperCase()}...`}
-                value={excerpt}
-                onChange={(e) => onExcerptChange(e.target.value)}
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Content Editor</label>
+                  <div className="form-group">
+                    <label className="form-label">Meta Description / Excerpt ({selectedLang.toUpperCase()})</label>
+                    <input
+                      type="text"
+                      className="input-text"
+                      style={{ padding: '0.45rem 0.75rem', fontSize: '0.85rem' }}
+                      placeholder={`Summary for search engines & excerpt in ${selectedLang.toUpperCase()}...`}
+                      value={seoDescription || excerpt}
+                      onChange={(e) => onCombinedDescriptionChange(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
               <div className="rich-editor-wrapper">
                 <Editor
                   tinymceScriptSrc="https://cdnjs.cloudflare.com/ajax/libs/tinymce/7.3.0/tinymce.min.js"
@@ -975,7 +1806,9 @@ function BlogEditorContent() {
                   value={content}
                   onEditorChange={handleEditorChange}
                   init={{
-                    height: 660,
+                    height: 3300,
+                    min_height: 3000,
+                    resize: true,
                     branding: false,
                     promotion: false,
                     menubar: true,
@@ -1154,7 +1987,29 @@ function BlogEditorContent() {
                         }
                       });
                     },
-                    content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px; line-height: 1.6; }',
+                    content_style: `
+                      body {
+                        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        font-size: 16px;
+                        line-height: 1.75;
+                        color: #1f2937;
+                        padding: 1.5rem 2rem;
+                        max-width: 100%;
+                        box-sizing: border-box;
+                      }
+                      p { margin: 0 0 1.25rem 0; }
+                      h1, h2, h3, h4, h5, h6 { color: #111827; font-weight: 700; margin-top: 1.75rem; margin-bottom: 0.75rem; }
+                      h1 { font-size: 2rem; }
+                      h2 { font-size: 1.5rem; }
+                      h3 { font-size: 1.25rem; }
+                      img { max-width: 100%; height: auto; border-radius: 8px; }
+                      blockquote { border-left: 4px solid #74b75c; padding-left: 1rem; margin: 1.5rem 0; font-style: italic; color: #4b5563; }
+                      table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; }
+                      th, td { border: 1px solid #e5e7eb; padding: 0.75rem 1rem; text-align: left; }
+                      th { background-color: #f9fafb; font-weight: 600; }
+                      code { background: #f3f4f6; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.9em; }
+                      pre { background: #1e293b; color: #f8fafc; padding: 1rem; border-radius: 8px; overflow-x: auto; }
+                    `,
                     images_upload_handler: async (blobInfo, progress) => {
                       return new Promise(async (resolve, reject) => {
                         const formData = new FormData();
@@ -1180,7 +2035,6 @@ function BlogEditorContent() {
               </div>
             </div>
           </div>
-        </div>
 
         {/* Sidebar settings */}
         <div className="editor-sidebar">
@@ -1201,6 +2055,749 @@ function BlogEditorContent() {
                 value={author}
                 onChange={(e) => setAuthor(e.target.value)}
               />
+            </div>
+          </div>
+
+          {/* Card 2: Search Engine (SERP) & URL */}
+          <div className="sidebar-card">
+            <h3 className="sidebar-card-title">Search Engine (SERP) &amp; URL</h3>
+
+            {/* Realistic Desktop / Mobile Switcher */}
+            <div className="serp-device-tabs">
+              <button
+                type="button"
+                className={`serp-device-btn ${serpViewMode === 'desktop' ? 'active' : ''}`}
+                onClick={() => setSerpViewMode('desktop')}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                  <line x1="8" y1="21" x2="16" y2="21"></line>
+                  <line x1="12" y1="17" x2="12" y2="21"></line>
+                </svg>
+                Google Desktop
+              </button>
+              <button
+                type="button"
+                className={`serp-device-btn ${serpViewMode === 'mobile' ? 'active' : ''}`}
+                onClick={() => setSerpViewMode('mobile')}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+                  <line x1="12" y1="18" x2="12.01" y2="18"></line>
+                </svg>
+                Google Mobile
+              </button>
+            </div>
+
+            {/* Google SERP Preview: Desktop or Mobile */}
+            {serpViewMode === 'desktop' ? (
+              <div className="serp-preview-card">
+                <div className="serp-header-row">
+                  <div className="serp-source-info">
+                    <div className="serp-favicon-wrap">
+                      <svg className="serp-favicon-icon" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5">
+                        <path d="M12 2C6.5 2 2 6.5 2 12c0 3.5 1.8 6.6 4.6 8.4L12 22l5.4-1.6C20.2 18.6 22 15.5 22 12c0-5.5-4.5-10-10-10z" />
+                        <path d="M12 6v12M8 10l4-4 4 4" />
+                      </svg>
+                    </div>
+                    <div className="serp-source-text">
+                      <span className="serp-site-name">Prana Air</span>
+                      <span className="serp-url-breadcrumb">
+                        https://www.pranaair.com › blog › {slug || 'post-slug'}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="serp-kebab-menu" title="About this result">⋮</span>
+                </div>
+
+                <div className="serp-preview-title">
+                  {seoTitle || title || 'Post Title - Prana Air Blog'}
+                </div>
+
+                <p className="serp-preview-desc">
+                  <span className="serp-date-prefix">{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} — </span>
+                  {seoDescription || excerpt || 'Search engine description preview will appear here. Write a clear summary to help readers discover this article on Google...'}
+                </p>
+
+                <div className="serp-sitelinks-row">
+                  <span className="serp-sitelink-tag">⚡ Air Quality Guide</span>
+                  <span className="serp-sitelink-tag">🔬 Health Impact</span>
+                  <span className="serp-sitelink-tag">🌿 Clean Air</span>
+                </div>
+              </div>
+            ) : (
+              <div className="serp-mobile-container">
+                <div className="serp-mobile-statusbar">
+                  <span>9:41</span>
+                  <span>5G 📶 100% 🔋</span>
+                </div>
+                <div className="serp-mobile-searchbar">
+                  <span style={{ fontSize: '0.8rem' }}>🔍</span>
+                  <span style={{ color: '#64748b' }}>google.com/search?q={encodeURIComponent((seoTitle || title || 'prana air').toLowerCase())}</span>
+                </div>
+
+                <div className="serp-preview-card" style={{ padding: '0.75rem 0.85rem' }}>
+                  <div className="serp-header-row">
+                    <div className="serp-source-info">
+                      <div className="serp-favicon-wrap" style={{ width: '22px', height: '22px' }}>
+                        <svg className="serp-favicon-icon" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" style={{ width: '13px', height: '13px' }}>
+                          <path d="M12 2C6.5 2 2 6.5 2 12c0 3.5 1.8 6.6 4.6 8.4L12 22l5.4-1.6C20.2 18.6 22 15.5 22 12c0-5.5-4.5-10-10-10z" />
+                          <path d="M12 6v12M8 10l4-4 4 4" />
+                        </svg>
+                      </div>
+                      <div className="serp-source-text">
+                        <span className="serp-site-name" style={{ fontSize: '0.78rem' }}>Prana Air</span>
+                        <span className="serp-url-breadcrumb" style={{ fontSize: '0.68rem' }}>
+                          pranaair.com › blog › {slug || 'post-slug'}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="serp-kebab-menu">⋮</span>
+                  </div>
+
+                  <div className="serp-preview-title serp-mobile-title">
+                    {seoTitle || title || 'Post Title - Prana Air Blog'}
+                  </div>
+
+                  <div className="serp-body-layout">
+                    <p className="serp-preview-desc">
+                      <span className="serp-date-prefix">{new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} — </span>
+                      {seoDescription || excerpt || 'Search engine description preview will appear here. Write a clear summary to help readers discover this article on Google...'}
+                    </p>
+                    {featuredImage && (
+                      <img src={featuredImage} alt="SERP thumbnail" className="serp-mobile-thumb" />
+                    )}
+                  </div>
+
+                  <div className="serp-mobile-actions">
+                    <span className="serp-mobile-action-pill">ℹ️ About this result</span>
+                    <span className="serp-mobile-action-pill">↗ Share</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Live SEO & Readability Dashboard */}
+            <div className="seo-score-dashboard">
+              {/* SEO Score Badge */}
+              <div className="score-badge-card" style={{ borderLeft: `3.5px solid ${seoMetrics.seoColor}` }}>
+                <div className="score-ring-wrap">
+                  <svg className="score-ring-svg" viewBox="0 0 36 36">
+                    <path
+                      className="score-ring-bg"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                    <path
+                      className="score-ring-fill"
+                      stroke={seoMetrics.seoColor}
+                      strokeDasharray={`${seoMetrics.seoScore}, 100`}
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                  </svg>
+                  <div className="score-ring-text" style={{ color: seoMetrics.seoColor }}>
+                    {seoMetrics.seoScore}
+                  </div>
+                </div>
+                <div className="score-details">
+                  <div className="score-label">SEO Score</div>
+                  <div className="score-status" style={{ color: seoMetrics.seoColor }}>
+                    {seoMetrics.seoStatus}
+                  </div>
+                  <div className="score-subtext">{seoMetrics.wordCount} words</div>
+                </div>
+              </div>
+
+              {/* Readability Score Badge */}
+              <div className="score-badge-card" style={{ borderLeft: `3.5px solid ${seoMetrics.readabilityColor}` }}>
+                <div className="score-ring-wrap">
+                  <svg className="score-ring-svg" viewBox="0 0 36 36">
+                    <path
+                      className="score-ring-bg"
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                    <path
+                      className="score-ring-fill"
+                      stroke={seoMetrics.readabilityColor}
+                      strokeDasharray={`${seoMetrics.fleschScore}, 100`}
+                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                    />
+                  </svg>
+                  <div className="score-ring-text" style={{ color: seoMetrics.readabilityColor }}>
+                    {seoMetrics.fleschScore}
+                  </div>
+                </div>
+                <div className="score-details">
+                  <div className="score-label">Readability</div>
+                  <div className="score-grade-badge">Grade {seoMetrics.gradeLevel}</div>
+                  <div className="score-subtext">{seoMetrics.readabilityLabel}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Expandable Issues & Solutions Accordion */}
+            <div className="seo-audit-accordion">
+              <button
+                type="button"
+                className="seo-audit-header-btn"
+                onClick={() => setShowAuditDrawer(!showAuditDrawer)}
+              >
+                <div className="seo-audit-pills">
+                  <span className={`seo-status-pill ${generalIssues.length > 0 ? 'warning' : 'good'}`}>
+                    {generalIssues.length} Issues
+                  </span>
+                  <span className={`seo-status-pill ${hasCannibalization ? 'danger' : 'good'}`}>
+                    {hasCannibalization ? '1 Cannibalized' : '0 Cannibalized'}
+                  </span>
+                  <span className="seo-status-pill good">
+                    {seoMetrics.passed.length} Passed
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <span>{showAuditDrawer ? 'Hide Audit' : 'View Audit & Solutions'}</span>
+                  <span>{showAuditDrawer ? '▲' : '▼'}</span>
+                </div>
+              </button>
+
+              {showAuditDrawer && (
+                <>
+                  <div className="seo-audit-tab-pills">
+                    <button
+                      type="button"
+                      className={`seo-audit-tab-btn ${auditTab === 'issues' ? 'active' : ''}`}
+                      onClick={() => setAuditTab('issues')}
+                    >
+                      Issues ({generalIssues.length})
+                    </button>
+                    <button
+                      type="button"
+                      className={`seo-audit-tab-btn ${auditTab === 'cannibalization' ? 'active' : ''}`}
+                      onClick={() => setAuditTab('cannibalization')}
+                      style={hasCannibalization ? { color: '#dc2626', fontWeight: 700 } : {}}
+                    >
+                      Cannibalization ({hasCannibalization ? '1' : '0'})
+                    </button>
+                    <button
+                      type="button"
+                      className={`seo-audit-tab-btn ${auditTab === 'passed' ? 'active' : ''}`}
+                      onClick={() => setAuditTab('passed')}
+                    >
+                      Passed ({seoMetrics.passed.length})
+                    </button>
+                  </div>
+
+                  {/* Claude AI Master Auto-Fix Header */}
+                  <div className="seo-ai-auto-bar">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span style={{ fontSize: '0.85rem' }}>⚡</span>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#4c1d95' }}>
+                        Claude AI Optimization
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-claude-ai-fix"
+                      title="Automatically optimize Title (45-60c), Slug, and Meta Description (125-155c) with Claude"
+                      onClick={() => handleAiFixSeo('fix_all')}
+                      disabled={!!aiLoading}
+                    >
+                      {aiLoading === 'fix_all' ? '✨ Claude Optimizing...' : '✨ Auto-Fix All with Claude'}
+                    </button>
+                  </div>
+
+                  <div className="seo-audit-content">
+                    {auditTab === 'issues' && (
+                      <>
+                        {hasCannibalization && (
+                          <div
+                            style={{
+                              background: '#fffbeb',
+                              border: '1px solid #fde68a',
+                              borderRadius: '7px',
+                              padding: '0.5rem 0.75rem',
+                              fontSize: '0.72rem',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              color: '#92400e',
+                              gap: '0.5rem'
+                            }}
+                          >
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <span>⚠️ <strong>Keyword Cannibalization Detected</strong> ({cannibalizationIssue.cannibalization.primaryConflict.overlapScore}% overlap)</span>
+                              <div style={{ fontSize: '0.68rem', color: '#b45309', marginTop: '0.15rem' }}>
+                                Competing with: &quot;{cannibalizationIssue.cannibalization.primaryConflict.title}&quot;
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.35rem', flexShrink: 0, alignItems: 'center' }}>
+                              <button
+                                type="button"
+                                className="btn-claude-inline"
+                                style={{ margin: 0, padding: '0.2rem 0.45rem', fontSize: '0.68rem' }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAiFixSeo('differentiate_cannibalization');
+                                }}
+                                disabled={!!aiLoading}
+                              >
+                                {aiLoading === 'differentiate_cannibalization' ? '✨ Fixing...' : '✨ Differentiate'}
+                              </button>
+                              <button
+                                type="button"
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#b45309',
+                                  fontWeight: 700,
+                                  fontSize: '0.72rem',
+                                  cursor: 'pointer',
+                                  textDecoration: 'underline',
+                                  padding: 0
+                                }}
+                                onClick={() => setAuditTab('cannibalization')}
+                              >
+                                Proof →
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {generalIssues.length === 0 ? (
+                          <div style={{ color: '#16a34a', fontSize: '0.8rem', textAlign: 'center', padding: '1rem' }}>
+                            🎉 Outstanding! No on-page SEO or readability issues found.
+                          </div>
+                        ) : (
+                          generalIssues.map((item, idx) => {
+                            const itemTitleLower = (item.title || '').toLowerCase();
+                            let aiAction = null;
+                            let aiBtnLabel = null;
+                            if (itemTitleLower.includes('title')) {
+                              aiAction = 'fix_title';
+                              aiBtnLabel = '✨ Fix Title with Claude';
+                            } else if (itemTitleLower.includes('description') || itemTitleLower.includes('excerpt')) {
+                              aiAction = 'fix_description';
+                              aiBtnLabel = '✨ Fix Description with Claude';
+                            } else if (itemTitleLower.includes('slug')) {
+                              aiAction = 'fix_slug';
+                              aiBtnLabel = '✨ Fix Slug with Claude';
+                            } else if (itemTitleLower.includes('stuffing') || itemTitleLower.includes('over-optimization')) {
+                              aiAction = 'optimize_content';
+                              aiBtnLabel = '✨ De-stuff & Add LSI Synonyms with Claude';
+                            } else if (itemTitleLower.includes('e-e-a-t') || itemTitleLower.includes('ymyl') || itemTitleLower.includes('citation') || itemTitleLower.includes('disclaimer')) {
+                              aiAction = 'fix_eeat_ymyl';
+                              aiBtnLabel = '✨ Upgrade E-E-A-T & Add YMYL Disclaimer with Claude';
+                            } else if (itemTitleLower.includes('body') || itemTitleLower.includes('density') || itemTitleLower.includes('missing from article body')) {
+                              aiAction = 'optimize_content';
+                              aiBtnLabel = '✨ Weave Keyword into Post Body with Claude';
+                            } else if (itemTitleLower.includes('reading') || itemTitleLower.includes('readability') || itemTitleLower.includes('complex') || itemTitleLower.includes('sentence') || itemTitleLower.includes('jargon')) {
+                              aiAction = 'fix_readability';
+                              aiBtnLabel = '✨ Simplify Reading Level with Claude';
+                            } else if (itemTitleLower.includes('no target keyword') || itemTitleLower.includes('keyword')) {
+                              aiAction = 'suggest_keyword';
+                              aiBtnLabel = '✨ Suggest Keyword with Claude';
+                            }
+
+                            return (
+                              <div key={idx} className={`seo-issue-item ${item.type}`}>
+                                <div className="seo-issue-title">
+                                  <span>{item.type === 'error' ? '🔴' : '⚠️'}</span>
+                                  <span>{item.title}</span>
+                                </div>
+                                <div className="seo-issue-desc">{item.issue}</div>
+                                <div className="seo-issue-solution">
+                                  💡 <strong>Solution:</strong> {item.solution}
+                                </div>
+                                {aiAction && (
+                                  <button
+                                    type="button"
+                                    className="btn-claude-inline"
+                                    onClick={() => handleAiFixSeo(aiAction)}
+                                    disabled={!!aiLoading}
+                                  >
+                                    {aiLoading === aiAction ? '✨ Generating...' : aiBtnLabel}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })
+                        )}
+                      </>
+                    )}
+
+                    {auditTab === 'cannibalization' && (
+                      hasCannibalization ? (
+                        <div className="seo-issue-item warning" style={{ borderLeftColor: '#f59e0b', background: '#fffdf5' }}>
+                          <div className="seo-issue-title">
+                            <span>⚠️</span>
+                            <span>{cannibalizationIssue.title}</span>
+                          </div>
+                          <div className="seo-issue-desc">{cannibalizationIssue.issue}</div>
+
+                          {cannibalizationIssue.cannibalization && (
+                            <div className="cannibalization-proof-card">
+                              <div className="cannibalization-proof-header">
+                                <span className={`cannibalization-badge ${cannibalizationIssue.cannibalization.primaryConflict.overlapScore >= 68 ? 'high' : 'moderate'}`}>
+                                  {cannibalizationIssue.cannibalization.primaryConflict.overlapScore >= 68 ? 'High Conflict Risk' : 'Moderate Conflict Risk'}
+                                </span>
+                                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b' }}>
+                                  {cannibalizationIssue.cannibalization.primaryConflict.overlapScore}% Query Match
+                                </span>
+                              </div>
+
+                              <div className="cannibalization-conflict-box">
+                                <span className="cannibalization-conflict-label">Competing Published Article:</span>
+                                <div className="cannibalization-conflict-title">{cannibalizationIssue.cannibalization.primaryConflict.title}</div>
+                                <a
+                                  href={cannibalizationIssue.cannibalization.primaryConflict.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="cannibalization-conflict-url"
+                                >
+                                  🔗 {cannibalizationIssue.cannibalization.primaryConflict.url}
+                                </a>
+                              </div>
+
+                              <div>
+                                <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#475569' }}>Shared Target Keywords:</span>
+                                <div className="cannibalization-keywords-row">
+                                  {cannibalizationIssue.cannibalization.overlappingKeywords.map((kw, kwIdx) => (
+                                    <span key={kwIdx} className="cannibalization-kw-pill">
+                                      #{kw}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="cannibalization-proof-text">
+                                <strong>SEO Impact Proof:</strong> {cannibalizationIssue.proof?.riskAnalysis}
+                              </div>
+
+                              <div className="cannibalization-actions-row">
+                                <button
+                                  type="button"
+                                  className="cannibalization-quick-btn claude-ai"
+                                  title="Rewrite title, slug, and angle with Claude to target a distinct non-competing keyword"
+                                  onClick={() => handleAiFixSeo('differentiate_cannibalization')}
+                                  disabled={!!aiLoading}
+                                >
+                                  {aiLoading === 'differentiate_cannibalization' ? '✨ Differentiating...' : '✨ Differentiate with Claude'}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="cannibalization-quick-btn primary"
+                                  title="Set canonical slug to point to this published master article"
+                                  onClick={() => {
+                                    setCanonicalMode('custom');
+                                    setCanonicalUrl(cannibalizationIssue.cannibalization.primaryConflict.url);
+                                    showNotification('Canonical slug set to master article URL!', 'success');
+                                  }}
+                                >
+                                  🎯 Set as Master Canonical URL
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="seo-issue-solution">
+                            💡 <strong>Action Plan:</strong> {cannibalizationIssue.solution}
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '1.25rem 1rem', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.45rem', alignItems: 'center' }}>
+                          <span style={{ fontSize: '1.75rem' }}>🎉</span>
+                          <span style={{ fontWeight: 700, color: '#166534', fontSize: '0.88rem' }}>Topical Exclusivity Verified</span>
+                          <span style={{ fontSize: '0.75rem', color: '#4b5563', lineHeight: 1.45 }}>
+                            No keyword cannibalization detected against {existingPosts.length} published articles. This article occupies distinct search territory with zero internal competition.
+                          </span>
+                        </div>
+                      )
+                    )}
+
+                    {auditTab === 'passed' && (
+                      seoMetrics.passed.map((item, idx) => (
+                        <div key={idx} className="seo-passed-item">
+                          <div className="seo-passed-title">
+                            <span>✅</span>
+                            <span>{item.title}</span>
+                          </div>
+                          <div className="seo-passed-desc">{item.detail}</div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Canonical Slug & Status (Compact) */}
+            <div className="canonical-compact-card">
+              <div className="canonical-compact-header">
+                <div className="canonical-title-row">
+                  <label className="canonical-section-label" style={{ margin: 0 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2.5">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                    </svg>
+                    Canonical Slug
+                  </label>
+                  <span className={`seo-status-pill ${canonicalMode === 'self' ? 'good' : 'warning'}`}>
+                    {canonicalMode === 'self' ? 'Self' : 'Not Self'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (canonicalMode === 'self') {
+                      setCanonicalMode('custom');
+                    } else {
+                      setCanonicalMode('self');
+                      setCanonicalUrl('');
+                    }
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#2563eb',
+                    cursor: 'pointer',
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    padding: 0
+                  }}
+                >
+                  {canonicalMode === 'self' ? 'Edit' : 'Set to Self'}
+                </button>
+              </div>
+
+              {canonicalMode === 'self' ? (
+                <div className="canonical-slug-display">
+                  <span className="canonical-slug-prefix">pranaair.com/blog/</span>
+                  <span className="canonical-slug-val">{slug || 'post-slug'}</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.2rem' }}>
+                  <input
+                    type="text"
+                    className="input-text"
+                    style={{ padding: '0.35rem 0.55rem', fontSize: '0.78rem', background: '#ffffff', flex: 1 }}
+                    placeholder="Custom slug or master URL..."
+                    value={canonicalUrl}
+                    onChange={(e) => setCanonicalUrl(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCanonicalUrl('');
+                      setCanonicalMode('self');
+                    }}
+                    className="cannibalization-quick-btn"
+                    title="Reset to default self-referential URL"
+                  >
+                    Reset
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* URL Slug with Lock/Edit */}
+            <div className="form-group" style={{ marginTop: '1.1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <label className="form-label" style={{ margin: 0 }}>URL Slug</label>
+                  <button
+                    type="button"
+                    className="btn-claude-field-quick"
+                    title="Generate clean SEO slug with Claude"
+                    onClick={() => handleAiFixSeo('fix_slug')}
+                    disabled={!!aiLoading}
+                  >
+                    {aiLoading === 'fix_slug' ? '✨ Generating...' : '✨ AI Slug'}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSlugLocked(!isSlugLocked)}
+                  style={{ background: 'none', border: 'none', color: isSlugLocked ? '#2563eb' : '#16a34a', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600 }}
+                >
+                  {isSlugLocked ? '🔒 Edit Slug' : '🔓 Lock Slug'}
+                </button>
+              </div>
+              <input
+                type="text"
+                className="input-text"
+                style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
+                value={slug}
+                disabled={isSlugLocked}
+                onChange={(e) => setSlug(e.target.value)}
+                placeholder="url-slug"
+              />
+            </div>
+
+            {/* Primary Target Keyword Setting */}
+            <div className="primary-keyword-card" style={{ marginTop: '0.9rem', marginBottom: '0.9rem' }}>
+              <div className="primary-keyword-header">
+                <label className="primary-keyword-label" htmlFor="primary-keyword-input">
+                  <span>🎯</span>
+                  <span>Primary Target Keyword</span>
+                </label>
+                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className="btn-claude-inline"
+                    style={{ margin: 0, padding: '0.22rem 0.55rem', fontSize: '0.68rem' }}
+                    onClick={() => handleAiFixSeo('suggest_keyword')}
+                    disabled={!!aiLoading}
+                    title="Analyze article content and generate the best high-intent target keyword with Claude"
+                  >
+                    {aiLoading === 'suggest_keyword' ? '✨ Suggesting...' : '✨ AI Suggest'}
+                  </button>
+                  {primaryKeyword.trim() && (
+                    <button
+                      type="button"
+                      className="btn-claude-inline"
+                      style={{ margin: 0, padding: '0.22rem 0.55rem', fontSize: '0.68rem', background: '#ecfdf5', color: '#047857', border: '1px solid #a7f3d0' }}
+                      onClick={() => handleAiFixSeo('optimize_content')}
+                      disabled={!!aiLoading}
+                      title="Weave target keyword into article body, introduction & subheadings with Claude"
+                    >
+                      {aiLoading === 'optimize_content' ? '✨ Updating...' : '✨ Optimize Body'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="primary-keyword-input-wrap">
+                <input
+                  id="primary-keyword-input"
+                  type="text"
+                  className="primary-keyword-input"
+                  placeholder="e.g. airborne microplastics, indoor air quality"
+                  value={primaryKeyword}
+                  onChange={(e) => setPrimaryKeyword(e.target.value)}
+                />
+              </div>
+
+              {primaryKeyword.trim() ? (
+                <div className="primary-keyword-stats">
+                  <span className={`keyword-stat-pill ${seoMetrics.keywordInTitle ? 'found' : 'missing'}`}>
+                    {seoMetrics.keywordInTitle ? '✓ In Title' : '✕ Title'}
+                  </span>
+                  <span className={`keyword-stat-pill ${seoMetrics.keywordInSlug ? 'found' : 'missing'}`}>
+                    {seoMetrics.keywordInSlug ? '✓ In Slug' : '✕ Slug'}
+                  </span>
+                  <span className={`keyword-stat-pill ${seoMetrics.keywordInDesc ? 'found' : 'missing'}`}>
+                    {seoMetrics.keywordInDesc ? '✓ In Description' : '✕ Description'}
+                  </span>
+                  <span className={`keyword-stat-pill ${seoMetrics.keywordMatches > 0 && seoMetrics.keywordDensity <= 2.8 ? 'found' : 'missing'}`}>
+                    {seoMetrics.keywordMatches}× ({seoMetrics.keywordDensity}%)
+                  </span>
+                </div>
+              ) : (
+                <div style={{ fontSize: '0.68rem', color: '#64748b', marginTop: '0.35rem' }}>
+                  Target keyword benchmarks on-page SEO Title, Slug, Description &amp; Content Density.
+                </div>
+              )}
+            </div>
+
+            {/* SEO Title with Metric Bar */}
+            <div className="form-group" style={{ marginTop: '0.85rem' }}>
+              <div className="seo-metric-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <label className="form-label" style={{ margin: 0 }}>SEO Meta Title ({selectedLang.toUpperCase()})</label>
+                  <button
+                    type="button"
+                    className="btn-claude-field-quick"
+                    title="Optimize title for 45-60 chars with Claude"
+                    onClick={() => handleAiFixSeo('fix_title')}
+                    disabled={!!aiLoading}
+                  >
+                    {aiLoading === 'fix_title' ? '✨ Optimizing...' : '✨ AI Title'}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <span className={`seo-status-pill ${
+                    (seoTitle || title).length === 0 ? 'danger' :
+                    (seoTitle || title).length < 35 ? 'warning' :
+                    (seoTitle || title).length <= 60 ? 'good' : 'danger'
+                  }`}>
+                    {(seoTitle || title).length === 0 ? 'Missing' :
+                     (seoTitle || title).length < 35 ? 'Short' :
+                     (seoTitle || title).length <= 60 ? 'Optimal' : 'Too Long'}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: (seoTitle || title).length > 60 ? '#ef4444' : '#6b7280' }}>
+                    {(seoTitle || title).length}/60
+                  </span>
+                </div>
+              </div>
+              <input
+                type="text"
+                className="input-text"
+                style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
+                placeholder={title || 'Custom SEO title...'}
+                value={seoTitle}
+                onChange={(e) => onSeoTitleChange(e.target.value)}
+              />
+              <div className="seo-progress-track">
+                <div
+                  className="seo-progress-bar"
+                  style={{
+                    width: `${Math.min(100, ((seoTitle || title).length / 60) * 100)}%`,
+                    backgroundColor:
+                      (seoTitle || title).length === 0 ? '#ef4444' :
+                      (seoTitle || title).length < 35 ? '#f59e0b' :
+                      (seoTitle || title).length <= 60 ? '#22c55e' : '#ef4444'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* COMBINED: Excerpt / Summary & SEO Meta Description */}
+            <div className="form-group" style={{ marginTop: '0.85rem' }}>
+              <div className="seo-metric-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <label className="form-label" style={{ margin: 0 }}>Meta Description &amp; Excerpt ({selectedLang.toUpperCase()})</label>
+                  <button
+                    type="button"
+                    className="btn-claude-field-quick"
+                    title="Generate 125-155 char description with Claude"
+                    onClick={() => handleAiFixSeo('fix_description')}
+                    disabled={!!aiLoading}
+                  >
+                    {aiLoading === 'fix_description' ? '✨ Generating...' : '✨ AI Description'}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <span className={`seo-status-pill ${
+                    (seoDescription || excerpt).length === 0 ? 'danger' :
+                    (seoDescription || excerpt).length < 110 ? 'warning' :
+                    (seoDescription || excerpt).length <= 160 ? 'good' : 'danger'
+                  }`}>
+                    {(seoDescription || excerpt).length === 0 ? 'Missing' :
+                     (seoDescription || excerpt).length < 110 ? 'Short' :
+                     (seoDescription || excerpt).length <= 160 ? 'Optimal' : 'Too Long'}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 600, color: (seoDescription || excerpt).length > 160 ? '#ef4444' : '#6b7280' }}>
+                    {(seoDescription || excerpt).length}/160
+                  </span>
+                </div>
+              </div>
+              <textarea
+                className="input-text"
+                style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', minHeight: '80px', fontFamily: 'inherit', resize: 'vertical' }}
+                placeholder={`Unified summary for Google search snippet and blog card excerpt in ${selectedLang.toUpperCase()}...`}
+                value={seoDescription || excerpt}
+                onChange={(e) => onCombinedDescriptionChange(e.target.value)}
+              />
+              <div className="seo-progress-track">
+                <div
+                  className="seo-progress-bar"
+                  style={{
+                    width: `${Math.min(100, ((seoDescription || excerpt).length / 160) * 100)}%`,
+                    backgroundColor:
+                      (seoDescription || excerpt).length === 0 ? '#ef4444' :
+                      (seoDescription || excerpt).length < 110 ? '#f59e0b' :
+                      (seoDescription || excerpt).length <= 160 ? '#22c55e' : '#ef4444'
+                  }}
+                />
+              </div>
             </div>
           </div>
 
@@ -1367,31 +2964,6 @@ function BlogEditorContent() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem' }}>
               <input type="checkbox" id="promoActive" checked={promoActive} onChange={(e) => setPromoActive(e.target.checked)} style={{ width: '16px', height: '16px' }} />
               <label htmlFor="promoActive" style={{ fontWeight: 600, fontSize: '0.875rem' }}>Enable Banner for this post</label>
-            </div>
-          </div>
-
-          <div className="sidebar-card">
-            <h3 className="sidebar-card-title">SEO Engine ({selectedLang.toUpperCase()})</h3>
-            <div className="form-group" style={{ marginBottom: '1rem' }}>
-              <label className="form-label">SEO Meta Title ({selectedLang.toUpperCase()})</label>
-              <input
-                type="text"
-                className="input-text"
-                style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
-                placeholder={title || 'Custom SEO title...'}
-                value={seoTitle}
-                onChange={(e) => onSeoTitleChange(e.target.value)}
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">SEO Meta Description ({selectedLang.toUpperCase()})</label>
-              <textarea
-                className="input-text"
-                style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', minHeight: '80px', fontFamily: 'inherit', resize: 'none' }}
-                placeholder={excerpt || 'Custom SEO description...'}
-                value={seoDescription}
-                onChange={(e) => onSeoDescriptionChange(e.target.value)}
-              ></textarea>
             </div>
           </div>
         </div>
