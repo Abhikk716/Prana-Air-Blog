@@ -852,17 +852,25 @@ a {
    `a { color: inherit; text-decoration: none; }` reset (globals.css) makes
    them indistinguishable from surrounding text, so restore link styling
    scoped to post body content only. */
-.prose-editorial a:not(.toc-item a):not(.ez-toc-link) {
-  color: #5e9e48;
-  text-decoration: underline;
-  text-decoration-color: rgba(94, 158, 72, 0.4);
-  text-underline-offset: 2px;
+.prose-editorial a:not(.toc-item a):not(.ez-toc-link):not(.btn-discover):not(.editorial-tag-capsule):not(.social-btn),
+.editorial-content a:not(.toc-item a):not(.ez-toc-link):not(.btn-discover):not(.editorial-tag-capsule):not(.social-btn),
+.details-content a:not(.toc-item a):not(.ez-toc-link):not(.btn-discover) {
+  color: #3b8725;
   font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: rgba(59, 135, 37, 0.45);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+  transition: all 0.2s ease-in-out;
 }
 
-.prose-editorial a:not(.toc-item a):not(.ez-toc-link):hover {
-  color: #3f6e30;
-  text-decoration-color: currentColor;
+.prose-editorial a:not(.toc-item a):not(.ez-toc-link):not(.btn-discover):not(.editorial-tag-capsule):not(.social-btn):hover,
+.editorial-content a:not(.toc-item a):not(.ez-toc-link):not(.btn-discover):not(.editorial-tag-capsule):not(.social-btn):hover,
+.details-content a:not(.toc-item a):not(.ez-toc-link):not(.btn-discover):hover {
+  color: #245815;
+  text-decoration-color: #245815;
+  background-color: rgba(116, 183, 92, 0.14);
+  border-radius: 4px;
 }
 
 /* Tags */
