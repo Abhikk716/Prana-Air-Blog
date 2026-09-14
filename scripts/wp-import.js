@@ -134,7 +134,12 @@ async function importOne(wp, { force, dryRun, existingForScore }) {
   if (dryRun) return 'dry';
 
   if (existing) {
-    await Post.updateOne({ _id: existing._id }, { $set: doc });
+    // Re-importing an existing post is a content resync from WordPress, not
+    // a translations reset — never let it wipe out translations already
+    // done in the editor (toPostDoc always sets translations: {} for the
+    // create path, which is wrong to replay here).
+    const { translations, ...updateDoc } = doc;
+    await Post.updateOne({ _id: existing._id }, { $set: updateDoc });
     return 'updated';
   }
   await Post.create(doc);
