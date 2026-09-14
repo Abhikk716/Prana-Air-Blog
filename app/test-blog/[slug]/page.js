@@ -282,7 +282,12 @@ export default async function BlogPostPage(props) {
                   .replace(
                     /([^"'\s=]*?)\/?wp-content\/uploads\/([^"'\s>]+)/gi,
                     '/wp-content/uploads/$2'
-                  )}
+                  )
+                  // Only the full-size image is downloaded locally for preview; WP's
+                  // responsive srcset variants (e.g. -300x200.webp) 404 here and browsers
+                  // don't fall back to src when a chosen srcset candidate fails to load.
+                  .replace(/\s+srcset="[^"]*"/gi, '')
+                  .replace(/\s+sizes="[^"]*"/gi, '')}
               />
 
               {bottomPromotions.length > 0 && (

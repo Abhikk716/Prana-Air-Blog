@@ -760,12 +760,17 @@ a {
 }
 
 /* Analytics filter bar */
-.analytics-filters {
+.analytics-toolbar {
   display: flex;
-  gap: 1.25rem;
+  gap: 1.5rem;
   margin-bottom: 2rem;
   flex-wrap: wrap;
   align-items: flex-end;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 1.1rem 1.4rem;
+  box-shadow: var(--shadow-sm);
 }
 
 .analytics-filter-group {
@@ -775,80 +780,116 @@ a {
 }
 
 .analytics-filter-group label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
 }
 
 .analytics-filter-group select,
 .analytics-filter-group input {
-  padding: 0.65rem 1rem;
+  padding: 0.6rem 1rem;
   border-radius: 10px;
   border: 1px solid var(--border-color);
   outline: none;
-  background: var(--bg-card);
+  background: #fbfaf8;
   font-size: 0.875rem;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  font-weight: 600;
+  color: var(--text-main);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  cursor: pointer;
+}
+
+.analytics-filter-group select:hover,
+.analytics-filter-group input:hover {
+  background: #ffffff;
 }
 
 .analytics-filter-group select:focus,
 .analytics-filter-group input:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(116, 183, 92, 0.12);
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(116, 183, 92, 0.14);
 }
 
 @media (max-width: 480px) {
-  .analytics-filters { gap: 1rem; }
+  .analytics-toolbar { gap: 1rem; padding: 1rem; }
   .analytics-filter-group select,
   .analytics-filter-group input { width: 100%; }
 }
 
 /* Stat cards */
 .stat-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  padding: 1.5rem;
-  text-align: center;
+  padding: 1.35rem 1.5rem;
   box-shadow: var(--shadow-sm);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .stat-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   box-shadow: var(--shadow-md);
 }
 
+.stat-card-icon {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(116, 183, 92, 0.12);
+  color: var(--primary-hover);
+}
+
+.stat-card--accent-blue .stat-card-icon { background: rgba(8, 145, 178, 0.12); color: #0e7490; }
+.stat-card--accent-amber .stat-card-icon { background: rgba(245, 158, 11, 0.14); color: #b45309; }
+
+.stat-card-body { min-width: 0; }
+
 .stat-card.stat-highlight {
-  background: linear-gradient(to bottom right, #ffffff, #f0fdf4);
-  border: 2px solid rgba(116, 183, 92, 0.3);
-  box-shadow: 0 4px 12px rgba(116, 183, 92, 0.15);
+  background: linear-gradient(135deg, #ffffff, #f0fdf4 130%);
+  border: 1px solid rgba(116, 183, 92, 0.35);
+  box-shadow: 0 6px 16px rgba(116, 183, 92, 0.16);
+}
+
+.stat-card.stat-highlight .stat-card-icon {
+  background: var(--primary);
+  color: #ffffff;
 }
 
 .stat-label {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.3rem;
 }
 
 .stat-card.stat-highlight .stat-label { color: #15803d; }
 
 .stat-value {
-  font-size: 2.25rem;
+  font-size: 1.9rem;
   font-weight: 800;
   color: var(--text-dark);
   letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 
 .stat-card.stat-highlight .stat-value { color: #14532d; }
 
 @media (max-width: 480px) {
-  .stat-value { font-size: 1.65rem; }
+  .stat-value { font-size: 1.5rem; }
+  .stat-card { padding: 1.1rem 1.25rem; }
+  .stat-card-icon { width: 40px; height: 40px; }
 }
 
 /* Chart cards */
@@ -861,6 +902,11 @@ a {
   min-width: 0;
   overflow: hidden;
   box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.2s ease;
+}
+
+.chart-card:hover {
+  box-shadow: var(--shadow-md);
 }
 
 @media (max-width: 640px) {
@@ -868,19 +914,29 @@ a {
 }
 
 .section-title {
-  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: var(--text-main);
-  margin-bottom: 0.6rem;
+  margin-bottom: 0.75rem;
 }
 
+.section-title svg { color: var(--primary-hover); flex: none; }
+
 .section-title-lg {
-  font-size: 1.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.25rem;
   font-weight: 800;
   color: var(--text-main);
   margin-bottom: 1.1rem;
   letter-spacing: -0.02em;
 }
+
+.section-title-lg svg { color: var(--primary-hover); flex: none; }
 
 /* Badges */
 .badge-status {

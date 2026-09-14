@@ -49,6 +49,26 @@ const SORT_PRESETS = [
   ['translations:asc', 'Fewest Translations']
 ];
 
+// Minimal inline icon set for the analytics tab — avoids pulling in an icon
+// library for a handful of glyphs. All stroke-based so `currentColor` picks
+// up whatever accent color the stat/section wrapper sets.
+const ICONS = {
+  eye: 'M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
+  click: 'M9 2v3M9 16v3M2 9h3M16 9h3M4.2 4.2l2.1 2.1M13.7 13.7l2.1 2.1 M9 6a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
+  trend: 'M2 15l5.5-5.5 4 4L21 4 M14.5 4H21v6.5',
+  doc: 'M6 2h7l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z M13 2v5h5',
+  pie: 'M12 2v10l7.07 7.07A10 10 0 1 1 12 2Z M22 12A10 10 0 0 0 12 2v10Z',
+  bars: 'M4 20V10 M12 20V4 M20 20v-7',
+  megaphone: 'M3 11v2a1 1 0 0 0 1 1h2l4 5V5L6 10H4a1 1 0 0 0-1 1Z M14 8a4 4 0 0 1 0 8 M17 4a8 8 0 0 1 0 16'
+};
+function Icon({ name, size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d={ICONS[name]} />
+    </svg>
+  );
+}
+
 function LangMatrix({ langs }) {
   const have = new Set(langs || []);
   const done = ALL_LANGUAGES.filter(l => have.has(l.code)).length;
@@ -1101,7 +1121,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
       {activeTab === 'analytics' && (
         <div style={{ padding: '1rem 0' }}>
 
-          <div className="analytics-filters">
+          <div className="analytics-toolbar">
             <div className="analytics-filter-group">
               <label>Time Range</label>
               <select
@@ -1156,27 +1176,39 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
           ) : (
             <>
               <div className="analytics-grid">
-                <div className="stat-card">
-                  <div className="stat-label">Total Views</div>
-                  <div className="stat-value">{metrics.totalViews.toLocaleString()}</div>
+                <div className="stat-card stat-card--accent-green">
+                  <div className="stat-card-icon"><Icon name="eye" /></div>
+                  <div className="stat-card-body">
+                    <div className="stat-label">Total Views</div>
+                    <div className="stat-value">{metrics.totalViews.toLocaleString()}</div>
+                  </div>
                 </div>
-                <div className="stat-card">
-                  <div className="stat-label">Banner Clicks</div>
-                  <div className="stat-value" style={{ color: '#74b75c' }}>{metrics.totalClicks.toLocaleString()}</div>
+                <div className="stat-card stat-card--accent-blue">
+                  <div className="stat-card-icon"><Icon name="click" /></div>
+                  <div className="stat-card-body">
+                    <div className="stat-label">Banner Clicks</div>
+                    <div className="stat-value">{metrics.totalClicks.toLocaleString()}</div>
+                  </div>
                 </div>
-                <div className="stat-card stat-highlight">
-                  <div className="stat-label">Average CTR %</div>
-                  <div className="stat-value">{metrics.totalCTR}%</div>
+                <div className="stat-card stat-highlight stat-card--accent-green">
+                  <div className="stat-card-icon"><Icon name="trend" /></div>
+                  <div className="stat-card-body">
+                    <div className="stat-label">Average CTR %</div>
+                    <div className="stat-value">{metrics.totalCTR}%</div>
+                  </div>
                 </div>
-                <div className="stat-card">
-                  <div className="stat-label">Published Posts</div>
-                  <div className="stat-value">{metrics.publishedCount}</div>
+                <div className="stat-card stat-card--accent-amber">
+                  <div className="stat-card-icon"><Icon name="doc" /></div>
+                  <div className="stat-card-body">
+                    <div className="stat-label">Published Posts</div>
+                    <div className="stat-value">{metrics.publishedCount}</div>
+                  </div>
                 </div>
               </div>
 
               {analyticsTimeFilter !== 'all' && timeChartData.length > 0 && (
                 <div style={{ marginBottom: '3rem', marginTop: '3rem' }}>
-                  <h3 className="section-title">Views Over Time</h3>
+                  <h3 className="section-title"><Icon name="trend" size={16} /> Views Over Time</h3>
                   <div className="chart-card">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={timeChartData} margin={{ top: 20, right: 30, left: -10, bottom: 5 }}>
@@ -1196,7 +1228,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
               <div className="charts-grid">
                 {categoryChartData.length > 0 && (
                   <div>
-                    <h3 className="section-title">Views by Category</h3>
+                    <h3 className="section-title"><Icon name="pie" size={16} /> Views by Category</h3>
                     <div className="chart-card">
                       <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
@@ -1237,7 +1269,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
 
                 {langChartData.length > 0 && (
                   <div>
-                    <h3 className="section-title">Views by Language</h3>
+                    <h3 className="section-title"><Icon name="bars" size={16} /> Views by Language</h3>
                     <div className="chart-card">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={langChartData} margin={{ top: 20, right: 30, left: -10, bottom: 20 }}>
@@ -1276,7 +1308,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 )}
               </div>
 
-              <h3 className="section-title-lg">Campaign Performance</h3>
+              <h3 className="section-title-lg"><Icon name="megaphone" size={18} /> Campaign Performance</h3>
               <div className="dashboard-table-container" style={{ marginBottom: '3rem' }}>
                 <table className="dashboard-table analytics-table">
                   <thead>
@@ -1311,7 +1343,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 </table>
               </div>
 
-              <h3 className="section-title-lg">Top Performing Posts</h3>
+              <h3 className="section-title-lg"><Icon name="trend" size={18} /> Top Performing Posts</h3>
               <div className="dashboard-table-container">
                 <table className="dashboard-table analytics-table">
                   <thead>

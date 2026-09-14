@@ -1,7 +1,7 @@
 {
   "name": "prana-air-blog",
   "version": "1.0.0",
-  "description": "This is the project workspace for the new Prana Air Test Blog system, incorporating a custom MongoDB database, Next.js API Routes, a custom CMS Dashboard with TipTap/Quill rich-text editor, and a WordPress migration utility.",
+  "description": "Headless blog CMS for Prana Air: Next.js + MongoDB, with a TinyMCE editor, SEO/translation tooling, and WordPress import/DB migration scripts.",
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
