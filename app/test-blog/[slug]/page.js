@@ -155,6 +155,36 @@ export default async function BlogPostPage(props) {
   const p = JSON.parse(JSON.stringify(pObj));
   const post = translatePost(p, lang);
 
+  // Article structured data (JSON-LD) — same shape WordPress's Schema Pro
+  // plugin emits on the live site, so this preview matches what search
+  // engines see once a post goes live at pranaair.com/blog/<slug>.
+  const siteDomain = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pranaair.com';
+  const canonicalUrl = `${siteDomain}/blog/${post.slug}${lang !== 'en' ? `?lang=${lang}` : ''}`;
+  let schemaImage = post.featuredImage || '';
+  if (schemaImage.includes('wp-content/uploads/')) {
+    const match = schemaImage.match(/wp-content\/uploads\/.*/);
+    if (match) schemaImage = '/' + match[0];
+  }
+  const absoluteSchemaImage = schemaImage
+    ? (schemaImage.startsWith('http') ? schemaImage : `${siteDomain}${schemaImage.startsWith('/') ? '' : '/'}${schemaImage}`)
+    : undefined;
+  const articleJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    mainEntityOfPage: { '@type': 'WebPage', '@id': canonicalUrl },
+    headline: post.title,
+    ...(absoluteSchemaImage ? { image: [absoluteSchemaImage] } : {}),
+    datePublished: post.publishedAt,
+    dateModified: post.updatedAt || post.publishedAt,
+    author: { '@type': 'Person', name: post.author || 'Prana Air' },
+    publisher: {
+      '@type': 'Organization',
+      name: 'Prana Air',
+      logo: { '@type': 'ImageObject', url: `${siteDomain}/wp-content/uploads/2021/03/prana-air-logo.jpeg` }
+    },
+    description: post.seo?.description || post.excerpt || ''
+  };
+
   const calculateReadingTime = (text) => {
     const wordsPerMinute = 200;
     const noOfWords = text ? text.split(/\s+/).length : 0;
@@ -205,6 +235,10 @@ export default async function BlogPostPage(props) {
 
   return (
     <div className="editorial-page-wrapper">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }}
+      />
       <div className="editorial-container">
 
         {/* Back Link */}
