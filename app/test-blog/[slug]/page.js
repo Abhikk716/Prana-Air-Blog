@@ -49,12 +49,17 @@ export async function generateMetadata(props) {
 
   // Translate post data
   const p = post.toObject ? post.toObject() : post;
+  if (p.translations instanceof Map) {
+    p.translations = Object.fromEntries(p.translations);
+  }
   post = translatePost(p, lang);
 
-  const pageTitle = post.seo?.title || post.title;
+  // A custom SEO title (Yoast-style) is already the complete <title> text —
+  // don't bolt " | Prana Air Blog" onto it, only onto the raw post title.
+  const pageTitle = post.seo?.title || `${post.title} | Prana Air Blog`;
   const pageDescription = post.seo?.description || post.excerpt || '';
   let postImage = post.featuredImage || '/uploads/featured/placeholder.jpg';
-  
+
   // Remove the Vercel/Dev domain completely for SEO so it becomes a relative path
   if (postImage.includes('wp-content/uploads/')) {
     const match = postImage.match(/wp-content\/uploads\/.*/);
@@ -67,22 +72,40 @@ export async function generateMetadata(props) {
   const siteDomain = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.pranaair.com';
   // Ensure postImage is an absolute URL for OpenGraph/Twitter
   const absolutePostImage = postImage.startsWith('http') ? postImage : `${siteDomain}${postImage.startsWith('/') ? '' : '/'}${postImage}`;
-  
+
   const canonicalUrl = `${siteDomain}/blog/${post.slug}${lang !== 'en' ? `?lang=${lang}` : ''}`;
 
+  // hreflang alternates — one per translation the post actually has, using
+  // this site's own ?lang= scheme (WordPress used per-language sub-paths,
+  // but our reader is a single route keyed by query param).
+  const HREFLANG = { in: 'en-IN', us: 'en-US', 'en-GB': 'en-GB', 'en-CA': 'en-CA', 'en-AU': 'en-AU', sg: 'en-SG', hi: 'hi', es: 'es', de: 'de', fr: 'fr', ru: 'ru', ja: 'ja', 'pt-PT': 'pt-PT' };
+  const translationCodes = Object.keys(p.translations || {});
+  const languages = { 'x-default': `${siteDomain}/blog/${post.slug}` };
+  translationCodes.forEach((code) => {
+    const tag = HREFLANG[code];
+    if (tag) languages[tag] = `${siteDomain}/blog/${post.slug}?lang=${code}`;
+  });
+
+  const wordCount = post.content ? post.content.replace(/<[^>]+>/g, ' ').trim().split(/\s+/).filter(Boolean).length : 0;
+  const readingMinutes = Math.max(1, Math.ceil(wordCount / 200));
+
   return {
-    title: `${pageTitle} | Prana Air Blog`,
+    title: pageTitle,
     description: pageDescription.substring(0, 160),
+    authors: [{ name: post.author || 'Prana Air' }],
     alternates: {
       canonical: canonicalUrl,
+      languages,
     },
     openGraph: {
+      locale: 'en_US',
       title: post.title,
       description: pageDescription,
       url: canonicalUrl,
       type: 'article',
-      publishedTime: post.publishedAt,
-      modifiedTime: post.updatedAt,
+      siteName: 'Prana Air Blog',
+      publishedTime: post.publishedAt ? new Date(post.publishedAt).toISOString() : undefined,
+      modifiedTime: post.updatedAt ? new Date(post.updatedAt).toISOString() : undefined,
       authors: [post.author || 'Admin'],
       images: [
         {
@@ -96,7 +119,14 @@ export async function generateMetadata(props) {
       title: post.title,
       description: pageDescription,
       images: [absolutePostImage],
-    }
+    },
+    other: {
+      'article:publisher': 'https://www.facebook.com/airprana',
+      'twitter:label1': 'Written by',
+      'twitter:data1': post.author || 'Prana Air',
+      'twitter:label2': 'Est. reading time',
+      'twitter:data2': `${readingMinutes} minutes`,
+    },
   };
 }
 
@@ -168,21 +198,91 @@ export default async function BlogPostPage(props) {
   const absoluteSchemaImage = schemaImage
     ? (schemaImage.startsWith('http') ? schemaImage : `${siteDomain}${schemaImage.startsWith('/') ? '' : '/'}${schemaImage}`)
     : undefined;
+  const schemaDescription = post.seo?.description || post.excerpt || '';
+  const organizationId = `${siteDomain}/blog/#organization`;
+  const websiteId = `${siteDomain}/blog/#website`;
+  const personId = `${siteDomain}/blog/#/schema/person/${post.author ? post.author.replace(/\s+/g, '').toLowerCase() : 'admin'}`;
+  const primaryImageId = `${canonicalUrl}#primaryimage`;
+  const webpageId = `${canonicalUrl}#webpage`;
+  const articleId = `${canonicalUrl}#article`;
+
   const articleJsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'Article',
-    mainEntityOfPage: { '@type': 'WebPage', '@id': canonicalUrl },
-    headline: post.title,
-    ...(absoluteSchemaImage ? { image: [absoluteSchemaImage] } : {}),
-    datePublished: post.publishedAt,
-    dateModified: post.updatedAt || post.publishedAt,
-    author: { '@type': 'Person', name: post.author || 'Prana Air' },
-    publisher: {
-      '@type': 'Organization',
-      name: 'Prana Air',
-      logo: { '@type': 'ImageObject', url: `${siteDomain}/wp-content/uploads/2021/03/prana-air-logo.jpeg` }
-    },
-    description: post.seo?.description || post.excerpt || ''
+    '@graph': [
+      {
+        '@type': 'Article',
+        '@id': articleId,
+        isPartOf: { '@id': webpageId },
+        author: { '@id': personId },
+        headline: post.title,
+        datePublished: post.publishedAt,
+        dateModified: post.updatedAt || post.publishedAt,
+        mainEntityOfPage: { '@id': webpageId },
+        publisher: { '@id': organizationId },
+        ...(absoluteSchemaImage ? { image: { '@id': primaryImageId }, thumbnailUrl: absoluteSchemaImage } : {}),
+        articleSection: post.categories || [],
+        inLanguage: 'en'
+      },
+      {
+        '@type': 'WebPage',
+        '@id': webpageId,
+        url: canonicalUrl,
+        name: post.title,
+        isPartOf: { '@id': websiteId },
+        ...(absoluteSchemaImage ? { primaryImageOfPage: { '@id': primaryImageId }, image: { '@id': primaryImageId }, thumbnailUrl: absoluteSchemaImage } : {}),
+        datePublished: post.publishedAt,
+        dateModified: post.updatedAt || post.publishedAt,
+        description: schemaDescription,
+        breadcrumb: { '@id': `${canonicalUrl}#breadcrumb` },
+        inLanguage: 'en',
+        potentialAction: [{ '@type': 'ReadAction', target: [canonicalUrl] }]
+      },
+      ...(absoluteSchemaImage ? [{
+        '@type': 'ImageObject',
+        inLanguage: 'en',
+        '@id': primaryImageId,
+        url: absoluteSchemaImage,
+        contentUrl: absoluteSchemaImage
+      }] : []),
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${canonicalUrl}#breadcrumb`,
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Home', item: `${siteDomain}/blog/` },
+          ...(post.categories && post.categories[0]
+            ? [{ '@type': 'ListItem', position: 2, name: post.categories[0], item: `${siteDomain}/blog/category/${post.categories[0].toLowerCase().replace(/\s+/g, '-')}/` }]
+            : []),
+          { '@type': 'ListItem', position: post.categories?.[0] ? 3 : 2, name: post.title }
+        ]
+      },
+      {
+        '@type': 'WebSite',
+        '@id': websiteId,
+        url: `${siteDomain}/blog/`,
+        name: 'Prana Air Blog',
+        publisher: { '@id': organizationId },
+        inLanguage: 'en'
+      },
+      {
+        '@type': 'Organization',
+        '@id': organizationId,
+        name: 'Prana Air',
+        url: `${siteDomain}/blog/`,
+        logo: {
+          '@type': 'ImageObject',
+          inLanguage: 'en',
+          '@id': `${siteDomain}/blog/#/schema/logo/image/`,
+          url: `${siteDomain}/wp-content/uploads/2021/03/prana-air-logo.jpeg`,
+          contentUrl: `${siteDomain}/wp-content/uploads/2021/03/prana-air-logo.jpeg`
+        },
+        image: { '@id': `${siteDomain}/blog/#/schema/logo/image/` }
+      },
+      {
+        '@type': 'Person',
+        '@id': personId,
+        name: post.author || 'Prana Air'
+      }
+    ]
   };
 
   const calculateReadingTime = (text) => {

@@ -68,3 +68,13 @@ Duplicated in `GET /api/posts/[id]` and `test-blog/[slug]/page.js`: post-level p
 ### Content quirks to preserve
 - Post HTML may contain legacy `/wp-content/uploads/...` image paths; `public/wp-content/uploads/` holds ~950 migrated files and the API/page rewrite these paths on read. `GET /api/posts/[id]` also wraps `<table>`s in a responsive wrapper and injects a `<style>` block at read time (not stored).
 - Styling is plain global CSS (`app/globals.css`, `app/admin/editor/editor.css`, `app/test-blog/blog.css`) plus inline styles; no CSS modules or Tailwind.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
