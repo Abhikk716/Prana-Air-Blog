@@ -2,30 +2,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid, PieChart, Pie, Legend } from 'recharts';
-
-// Same codes/grouping as the editor's language tabs. Rendered as a grid of
-// small code chips: green = translated, grey = not yet.
-const LANGUAGE_ROWS = [
-  [
-    { code: 'in', short: 'IN', label: 'English · India' },
-    { code: 'us', short: 'US', label: 'English · USA' },
-    { code: 'en-GB', short: 'GB', label: 'English · UK' },
-    { code: 'en-CA', short: 'CA', label: 'English · Canada' },
-    { code: 'en-AU', short: 'AU', label: 'English · Australia' },
-    { code: 'sg', short: 'SG', label: 'English · Singapore' }
-  ],
-  [
-    { code: 'hi', short: 'HI', label: 'Hindi' },
-    { code: 'es', short: 'ES', label: 'Spanish' },
-    { code: 'de', short: 'DE', label: 'German' },
-    { code: 'fr', short: 'FR', label: 'French' },
-    { code: 'ru', short: 'RU', label: 'Russian' },
-    { code: 'ja', short: 'JA', label: 'Japanese' },
-    { code: 'pt-PT', short: 'PT', label: 'Portuguese' }
-  ]
-];
-const ALL_LANGUAGES = LANGUAGE_ROWS.flat();
+import AnalyticsTab from './AnalyticsTab';
+import { ALL_LANGUAGES, LANGUAGE_ROWS, decodeEntities, PostThumb } from './shared';
 
 // Column sorting. `sortBy` is "<key>:<dir>"; clicking a header toggles the
 // direction, or switches keys using the direction that reads naturally.
@@ -48,26 +26,6 @@ const SORT_PRESETS = [
   ['readability:desc', 'Readability: High → Low'],
   ['translations:asc', 'Fewest Translations']
 ];
-
-// Minimal inline icon set for the analytics tab — avoids pulling in an icon
-// library for a handful of glyphs. All stroke-based so `currentColor` picks
-// up whatever accent color the stat/section wrapper sets.
-const ICONS = {
-  eye: 'M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z',
-  click: 'M9 2v3M9 16v3M2 9h3M16 9h3M4.2 4.2l2.1 2.1M13.7 13.7l2.1 2.1 M9 6a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
-  trend: 'M2 15l5.5-5.5 4 4L21 4 M14.5 4H21v6.5',
-  doc: 'M6 2h7l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z M13 2v5h5',
-  pie: 'M12 2v10l7.07 7.07A10 10 0 1 1 12 2Z M22 12A10 10 0 0 0 12 2v10Z',
-  bars: 'M4 20V10 M12 20V4 M20 20v-7',
-  megaphone: 'M3 11v2a1 1 0 0 0 1 1h2l4 5V5L6 10H4a1 1 0 0 0-1 1Z M14 8a4 4 0 0 1 0 8 M17 4a8 8 0 0 1 0 16'
-};
-function Icon({ name, size = 18 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d={ICONS[name]} />
-    </svg>
-  );
-}
 
 function LangMatrix({ langs }) {
   const have = new Set(langs || []);
@@ -101,9 +59,6 @@ function LangMatrix({ langs }) {
   );
 }
 
-// Titles migrated from WordPress can contain entities ("&amp;", "&#8217;").
-// They render literally inside JSX text, so decode the common ones here.
-const NAMED_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '–', mdash: '—', hellip: '…', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“' };
 // Modified-column formatting. The time is rendered only after mount (see
 // `mounted` in the component) so a server in another timezone can't cause a
 // hydration mismatch.
@@ -116,14 +71,6 @@ function formatTimePart(value) {
   if (!value) return '';
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-}
-
-function decodeEntities(text) {
-  if (!text || text.indexOf('&') === -1) return text || '';
-  return text
-    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
-    .replace(/&([a-z]+);/gi, (match, name) => NAMED_ENTITIES[name.toLowerCase()] ?? match);
 }
 
 // Score badges use the same thresholds as the editor's audit panel:
@@ -151,36 +98,6 @@ function ScorePill({ value, kind, grade }) {
   );
 }
 
-// Small featured-image thumbnail. Migrated images live under
-// /wp-content/uploads (served from /public when present); if a local copy is
-// missing, fall back to the WordPress host once, then to a placeholder.
-function PostThumb({ src, alt }) {
-  const [state, setState] = useState('ok'); // ok | fallback | broken
-  useEffect(() => { setState('ok'); }, [src]);
-
-  if (!src || state === 'broken') {
-    return (
-      <div className="post-thumb" aria-hidden="true">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
-        </svg>
-      </div>
-    );
-  }
-  const isWp = src.startsWith('/wp-content/');
-  const resolved = state === 'fallback' && isWp ? `https://www.pranaair.com/blog${src}` : src;
-  return (
-    <div className="post-thumb">
-      <img
-        src={resolved}
-        alt={alt || ''}
-        loading="lazy"
-        onError={() => setState(prev => (prev === 'ok' && isWp ? 'fallback' : 'broken'))}
-      />
-    </div>
-  );
-}
-
 export default function DashboardClient({ initialPosts, categories = [] }) {
   const [posts, setPosts] = useState(initialPosts);
   const [searchTerm, setSearchTerm] = useState('');
@@ -191,12 +108,6 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   const [languageFilter, setLanguageFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const POSTS_PER_PAGE = 20;
-
-  // Analytics filters & state
-  const [analyticsTimeFilter, setAnalyticsTimeFilter] = useState('all');
-  const [analyticsCategoryFilter, setAnalyticsCategoryFilter] = useState('all');
-  const [dailyData, setDailyData] = useState([]);
-  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   const [loadingId, setLoadingId] = useState(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -350,54 +261,6 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
       }
     });
   };
-
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
-
-  // Fetch daily analytics when time filter changes
-  useEffect(() => {
-    if (analyticsTimeFilter === 'all') {
-      setDailyData([]);
-      return;
-    }
-
-    // Don't fetch if custom is selected but dates aren't filled
-    if (analyticsTimeFilter === 'custom' && (!customStartDate || !customEndDate)) {
-      return;
-    }
-
-    const fetchAnalytics = async () => {
-      setLoadingAnalytics(true);
-      try {
-        let start = new Date();
-        let end = new Date();
-
-        if (analyticsTimeFilter === '7d') {
-          start.setDate(start.getDate() - 7);
-        } else if (analyticsTimeFilter === '30d') {
-          start.setDate(start.getDate() - 30);
-        } else if (analyticsTimeFilter === 'this_month') {
-          start.setDate(1); // First of the month
-        } else if (analyticsTimeFilter === 'custom') {
-          start = new Date(customStartDate);
-          end = new Date(customEndDate);
-          end.setHours(23, 59, 59, 999); // Include the whole end day
-        }
-
-        const res = await fetch(`/api/admin/analytics?startDate=${start.toISOString()}&endDate=${end.toISOString()}`);
-        const result = await res.json();
-        if (result.success) {
-          setDailyData(result.data || []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch analytics', err);
-      } finally {
-        setLoadingAnalytics(false);
-      }
-    };
-
-    fetchAnalytics();
-  }, [analyticsTimeFilter, customStartDate, customEndDate]);
 
   // Handle post deletion
   const handleDelete = async (postId, postTitle) => {
@@ -652,171 +515,8 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
     });
   };
 
-  // Compute analytics data based on filters
-  const { metrics, langChartData, categoryChartData, timeChartData, topPosts, campaignPerformance } = useMemo(() => {
-    const supportedLangs = ['en', 'in', 'us', 'en-GB', 'en-CA', 'en-AU', 'sg', 'hi', 'fr', 'de', 'es', 'ru', 'ja', 'pt-PT'];
-    let totalViews = 0;
-    let totalClicks = 0;
-    const langViews = supportedLangs.reduce((acc, lang) => ({ ...acc, [lang]: 0 }), {});
-    const catViews = {};
-    const timeViewsMap = {};
-    const postViewsMap = {};
-
-    const campaignStats = {};
-    if (bannerSettings && bannerSettings.length > 0) {
-      bannerSettings.forEach(b => {
-        const id = b.type === 'global' ? 'global' : b._id;
-        campaignStats[id] = {
-          name: b.type === 'global' ? 'Global Banner' : (b.name || 'Unnamed Campaign'),
-          views: 0,
-          clicks: 0
-        };
-      });
-    }
-
-    // `requireCurrentlyActive` gates on the banner's live isActive/endDate state.
-    // We only have the CURRENT banner config (no historical log of which campaign
-    // was live on a given past day), so for "all time" totals we attribute using
-    // today's active campaign, but for a historical date range we relax that gate
-    // — otherwise a campaign that has since ended would silently lose all of its
-    // past clicks/views instead of being reported under its own name.
-    const getBannerForPost = (post, requireCurrentlyActive) => {
-      const isLive = (promotion) => !requireCurrentlyActive || (promotion?.isActive && new Date(promotion.endDate) >= new Date());
-
-      if (post.promotion && isLive(post.promotion)) {
-        return null; // Post specific
-      }
-      if (post.categories && post.categories.length > 0) {
-        for (const cat of post.categories) {
-          const catBanner = bannerSettings.find(b => b.type === 'category' && b.categories?.includes(cat) && isLive(b.promotion));
-          if (catBanner) {
-            return catBanner._id;
-          }
-        }
-      }
-      const global = bannerSettings.find(b => b.type === 'global' && isLive(b.promotion));
-      if (global) {
-        return 'global';
-      }
-      return null;
-    };
-
-    if (analyticsTimeFilter === 'all') {
-      // Use initialPosts data
-      posts.forEach(post => {
-        if (analyticsCategoryFilter !== 'all' && (!post.categories || !post.categories.includes(analyticsCategoryFilter))) {
-          return; // Skip if category doesn't match
-        }
-
-        const v = post.analytics?.views || 0;
-        const c = post.analytics?.promotionClicks || 0;
-        totalViews += v;
-        totalClicks += c;
-
-        if (post.analytics?.viewsByLang) {
-          Object.entries(post.analytics.viewsByLang).forEach(([lang, views]) => {
-            if (langViews[lang] !== undefined) langViews[lang] += views;
-          });
-        }
-
-        if (post.categories) {
-          post.categories.forEach(cat => {
-            catViews[cat] = (catViews[cat] || 0) + v;
-          });
-        }
-
-        const bannerId = getBannerForPost(post, true);
-        if (bannerId && campaignStats[bannerId]) {
-          campaignStats[bannerId].views += v;
-          campaignStats[bannerId].clicks += c;
-        }
-
-        postViewsMap[post._id] = { post, views: v, clicks: c };
-      });
-    } else {
-      // Use dailyData
-      dailyData.forEach(d => {
-        const post = d.postId; // Populated post object
-        if (!post) return;
-
-        if (analyticsCategoryFilter !== 'all' && (!post.categories || !post.categories.includes(analyticsCategoryFilter))) {
-          return;
-        }
-
-        totalViews += d.views || 0;
-        totalClicks += d.promotionClicks || 0;
-
-        if (d.viewsByLang) {
-          Object.entries(d.viewsByLang).forEach(([lang, views]) => {
-            if (langViews[lang] !== undefined) langViews[lang] += views;
-          });
-        }
-
-        if (post.categories) {
-          post.categories.forEach(cat => {
-            catViews[cat] = (catViews[cat] || 0) + (d.views || 0);
-          });
-        }
-
-        const bannerId = getBannerForPost(post, false);
-        if (bannerId && campaignStats[bannerId]) {
-          campaignStats[bannerId].views += (d.views || 0);
-          campaignStats[bannerId].clicks += (d.promotionClicks || 0);
-        }
-
-        const dateStr = new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        timeViewsMap[dateStr] = (timeViewsMap[dateStr] || 0) + (d.views || 0);
-
-        if (!postViewsMap[post._id]) {
-          postViewsMap[post._id] = { post, views: 0, clicks: 0 };
-        }
-        postViewsMap[post._id].views += (d.views || 0);
-        postViewsMap[post._id].clicks += (d.promotionClicks || 0);
-      });
-    }
-
-    const totalCTR = totalViews > 0 ? ((totalClicks / totalViews) * 100).toFixed(2) : '0.00';
-    const publishedCount = posts.filter(p => p.status === 'published').length;
-
-    const langChartData = supportedLangs.map(lang => ({
-      name: lang.toUpperCase(),
-      views: langViews[lang]
-    }));
-
-    const categoryChartData = Object.keys(catViews)
-      .filter(cat => catViews[cat] > 0)
-      .map(cat => ({
-        name: cat,
-        views: catViews[cat]
-      })).sort((a, b) => b.views - a.views);
-
-    const timeChartData = Object.keys(timeViewsMap).map(date => ({
-      date,
-      views: timeViewsMap[date]
-    }));
-
-    const topPosts = Object.values(postViewsMap)
-      .sort((a, b) => b.views - a.views)
-      .slice(0, 10);
-
-    const campaignPerformance = Object.values(campaignStats)
-      .filter(c => c.views > 0 || c.clicks > 0)
-      .sort((a, b) => b.views - a.views);
-
-    return {
-      metrics: { totalViews, totalClicks, totalCTR, publishedCount },
-      langChartData,
-      categoryChartData,
-      timeChartData,
-      topPosts,
-      campaignPerformance
-    };
-  }, [posts, dailyData, analyticsTimeFilter, analyticsCategoryFilter, bannerSettings]);
-
-  const COLORS = ['#74b75c', '#0891b2', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b', '#10b981'];
-
   const TAB_META = {
-    analytics: { title: 'Analytics', subtitle: 'Track your blog performance, views, and banner clicks.' },
+    analytics: { title: 'Analytics', subtitle: 'Google Analytics traffic, banner clicks, content health and what to work on next.' },
     posts: { title: 'CMS Dashboard', subtitle: 'Manage your blog posts, draft articles, and track SEO metrics.' },
     banners: { title: 'Banner Campaigns', subtitle: 'Configure global and category-targeted promotion banners.' },
   };
@@ -1119,267 +819,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
       )}
 
       {activeTab === 'analytics' && (
-        <div style={{ padding: '1rem 0' }}>
-
-          <div className="analytics-toolbar">
-            <div className="analytics-filter-group">
-              <label>Time Range</label>
-              <select
-                value={analyticsTimeFilter}
-                onChange={(e) => setAnalyticsTimeFilter(e.target.value)}
-              >
-                <option value="all">All Time</option>
-                <option value="7d">Last 7 Days</option>
-                <option value="30d">Last 30 Days</option>
-                <option value="this_month">This Month</option>
-                <option value="custom">Custom Date Range</option>
-              </select>
-            </div>
-
-            {analyticsTimeFilter === 'custom' && (
-              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <div className="analytics-filter-group">
-                  <label>Start</label>
-                  <input
-                    type="date"
-                    value={customStartDate}
-                    onChange={(e) => setCustomStartDate(e.target.value)}
-                  />
-                </div>
-                <div className="analytics-filter-group">
-                  <label>End</label>
-                  <input
-                    type="date"
-                    value={customEndDate}
-                    onChange={(e) => setCustomEndDate(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="analytics-filter-group">
-              <label>Category</label>
-              <select
-                value={analyticsCategoryFilter}
-                onChange={(e) => setAnalyticsCategoryFilter(e.target.value)}
-              >
-                <option value="all">All Categories</option>
-                {categories.map((cat, i) => (
-                  <option key={i} value={cat}>{cat}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {loadingAnalytics ? (
-            <div style={{ padding: '4rem', textAlign: 'center', color: '#6b7280' }}>Loading analytics data...</div>
-          ) : (
-            <>
-              <div className="analytics-grid">
-                <div className="stat-card stat-card--accent-green">
-                  <div className="stat-card-icon"><Icon name="eye" /></div>
-                  <div className="stat-card-body">
-                    <div className="stat-label">Total Views</div>
-                    <div className="stat-value">{metrics.totalViews.toLocaleString()}</div>
-                  </div>
-                </div>
-                <div className="stat-card stat-card--accent-blue">
-                  <div className="stat-card-icon"><Icon name="click" /></div>
-                  <div className="stat-card-body">
-                    <div className="stat-label">Banner Clicks</div>
-                    <div className="stat-value">{metrics.totalClicks.toLocaleString()}</div>
-                  </div>
-                </div>
-                <div className="stat-card stat-highlight stat-card--accent-green">
-                  <div className="stat-card-icon"><Icon name="trend" /></div>
-                  <div className="stat-card-body">
-                    <div className="stat-label">Average CTR %</div>
-                    <div className="stat-value">{metrics.totalCTR}%</div>
-                  </div>
-                </div>
-                <div className="stat-card stat-card--accent-amber">
-                  <div className="stat-card-icon"><Icon name="doc" /></div>
-                  <div className="stat-card-body">
-                    <div className="stat-label">Published Posts</div>
-                    <div className="stat-value">{metrics.publishedCount}</div>
-                  </div>
-                </div>
-              </div>
-
-              {analyticsTimeFilter !== 'all' && timeChartData.length > 0 && (
-                <div style={{ marginBottom: '3rem', marginTop: '3rem' }}>
-                  <h3 className="section-title"><Icon name="trend" size={16} /> Views Over Time</h3>
-                  <div className="chart-card">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={timeChartData} margin={{ top: 20, right: 30, left: -10, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                        <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12, fontWeight: 600 }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} allowDecimals={false} />
-                        <Tooltip
-                          contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontWeight: 600 }}
-                        />
-                        <Line type="monotone" dataKey="views" stroke="#74b75c" strokeWidth={3} dot={{ r: 4, fill: '#74b75c', strokeWidth: 0 }} activeDot={{ r: 6 }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
-
-              <div className="charts-grid">
-                {categoryChartData.length > 0 && (
-                  <div>
-                    <h3 className="section-title"><Icon name="pie" size={16} /> Views by Category</h3>
-                    <div className="chart-card">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={categoryChartData}
-                            cx="40%"
-                            cy="50%"
-                            innerRadius={75}
-                            outerRadius={110}
-                            paddingAngle={2}
-                            minAngle={5}
-                            dataKey="views"
-                          >
-                            {categoryChartData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
-                          />
-                          <Legend
-                            layout="vertical"
-                            verticalAlign="middle"
-                            align="right"
-                            wrapperStyle={{
-                              paddingLeft: '10px',
-                              maxHeight: '320px',
-                              overflowY: 'auto',
-                              width: '45%',
-                              fontSize: '12px'
-                            }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                )}
-
-                {langChartData.length > 0 && (
-                  <div>
-                    <h3 className="section-title"><Icon name="bars" size={16} /> Views by Language</h3>
-                    <div className="chart-card">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={langChartData} margin={{ top: 20, right: 30, left: -10, bottom: 20 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                          <XAxis
-                            dataKey="name"
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fill: '#6b7280', fontSize: 11, fontWeight: 600 }}
-                            dy={15}
-                            interval={0}
-                            angle={-45}
-                            textAnchor="end"
-                            height={50}
-                          />
-                          <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 12 }} allowDecimals={false} />
-                          <Tooltip
-                            cursor={{ fill: 'rgba(0,0,0,0.03)' }}
-                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1)', fontWeight: 600 }}
-                          />
-                          <Bar dataKey="views" radius={[6, 6, 0, 0]} barSize={8}>
-                            {langChartData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.views > 0 ? 'url(#colorViews)' : '#e5e7eb'} />
-                            ))}
-                          </Bar>
-                          <defs>
-                            <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#74b75c" stopOpacity={0.9} />
-                              <stop offset="95%" stopColor="#74b75c" stopOpacity={0.7} />
-                            </linearGradient>
-                          </defs>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <h3 className="section-title-lg"><Icon name="megaphone" size={18} /> Campaign Performance</h3>
-              <div className="dashboard-table-container" style={{ marginBottom: '3rem' }}>
-                <table className="dashboard-table analytics-table">
-                  <thead>
-                    <tr>
-                      <th>Campaign Name</th>
-                      <th className="col-num">Views</th>
-                      <th className="col-num">Clicks</th>
-                      <th className="col-num">CTR</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {campaignPerformance.length > 0 ? campaignPerformance.map((campaign, i) => {
-                      const ctr = campaign.views > 0 ? ((campaign.clicks / campaign.views) * 100).toFixed(1) : '0.0';
-                      const isHighCTR = parseFloat(ctr) > 5.0;
-
-                      return (
-                        <tr key={i}>
-                          <td style={{ fontWeight: 600, color: '#1f2937' }}>{decodeEntities(campaign.name)}</td>
-                          <td className="col-num">{campaign.views.toLocaleString()}</td>
-                          <td className="col-num">{campaign.clicks.toLocaleString()}</td>
-                          <td className="col-num" style={{ color: isHighCTR ? '#15803d' : '#4b5563', fontWeight: isHighCTR ? 700 : 500, backgroundColor: isHighCTR ? 'rgba(34, 197, 94, 0.1)' : 'transparent' }}>
-                            {ctr}%
-                          </td>
-                        </tr>
-                      );
-                    }) : (
-                      <tr>
-                        <td colSpan="4" style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>No campaign data available for this period.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              <h3 className="section-title-lg"><Icon name="trend" size={18} /> Top Performing Posts</h3>
-              <div className="dashboard-table-container">
-                <table className="dashboard-table analytics-table">
-                  <thead>
-                    <tr>
-                      <th>Post Title</th>
-                      <th className="col-num">Views</th>
-                      <th className="col-num">Clicks</th>
-                      <th className="col-num">CTR</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {topPosts.map(({ post, views, clicks }) => {
-                      const ctr = views > 0 ? ((clicks / views) * 100).toFixed(1) : '0.0';
-                      const isHighCTR = parseFloat(ctr) > 10.0;
-
-                      return (
-                        <tr key={post._id}>
-                          <td style={{ fontWeight: 600, color: '#1f2937' }}>
-                            <a href={`/admin/editor?id=${post._id}`} style={{ color: 'inherit', textDecoration: 'none' }}>
-                              {decodeEntities(post.title)}
-                            </a>
-                          </td>
-                          <td className="col-num">{views.toLocaleString()}</td>
-                          <td className="col-num">{clicks.toLocaleString()}</td>
-                          <td className="col-num" style={{ color: isHighCTR ? '#15803d' : '#4b5563', fontWeight: isHighCTR ? 700 : 500, backgroundColor: isHighCTR ? 'rgba(34, 197, 94, 0.1)' : 'transparent' }}>
-                            {ctr}%
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </div>
+        <AnalyticsTab posts={posts} categories={categories} bannerSettings={bannerSettings} />
       )}
 
       {activeTab === 'banners' && (
