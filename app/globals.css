@@ -93,6 +93,16 @@ a {
   box-sizing: border-box !important;
 }
 
+.main-content-blog,
+.main-content:has(.editorial-page-wrapper),
+.main-content:has(.editorial-wrapper) {
+  max-width: 100% !important;
+  width: 100% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  background-color: var(--editorial-bg, #EEEEEA) !important;
+}
+
 .footer-container-full {
   max-width: 1440px !important;
   width: calc(100% - 16rem) !important;

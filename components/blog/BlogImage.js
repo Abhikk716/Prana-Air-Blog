@@ -35,7 +35,7 @@ export default function BlogImage({ post, className, style }) {
 
     // Clean up the relative path
     let cleanImg = img.startsWith('/') ? img : '/' + img;
-    cleanImg = cleanImg.replace(/^\/(test-blog|blog)\//, '/');
+    cleanImg = cleanImg.replace(/^\/(test-blog|blog|pranaair-cms)\//, '/');
 
     if (process.env.NODE_ENV !== 'development' && cleanImg.includes('/wp-content/uploads/')) {
       return `https://www.pranaair.com/blog${cleanImg}`;

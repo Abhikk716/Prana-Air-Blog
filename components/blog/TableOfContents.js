@@ -2,68 +2,89 @@
 
 import React, { useEffect, useState } from 'react';
 
-export default function TableOfContents({ contentSelector }) {
+export default function TableOfContents({ contentSelector = '.editorial-content' }) {
   const [headings, setHeadings] = useState([]);
   const [activeId, setActiveId] = useState('');
 
   useEffect(() => {
-    // Select all h2 elements within the content
-    const elements = Array.from(document.querySelectorAll(`${contentSelector} h2`));
-    
-    // Add IDs to h2 elements if they don't have one, and build the headings list
-    const headingData = elements.map((elem, index) => {
-      let id = elem.id;
-      if (!id) {
-        id = `heading-${index}`;
-        elem.id = id;
-      }
-      return {
-        id,
-        text: elem.innerText || elem.textContent,
-        top: elem.offsetTop
-      };
-    });
+    const extractHeadings = () => {
+      const container = document.querySelector(contentSelector);
+      if (!container) return;
 
-    setHeadings(headingData);
+      const elements = Array.from(container.querySelectorAll('h2, h3'));
+      if (elements.length === 0) return;
 
-    const handleScroll = () => {
-      const scrollPosition = window.scrollY + 100; // Offset for header/padding
-      
-      let currentActiveId = '';
-      for (const heading of headingData) {
-        const element = document.getElementById(heading.id);
-        if (element && element.offsetTop <= scrollPosition) {
-          currentActiveId = heading.id;
+      const headingData = elements.map((elem, index) => {
+        let id = elem.id;
+        if (!id) {
+          const slugified = (elem.innerText || elem.textContent || '')
+            .toLowerCase()
+            .replace(/[^\w\s-]/g, '')
+            .replace(/\s+/g, '-');
+          id = slugified || `heading-${index}`;
+          elem.id = id;
         }
-      }
-      
-      setActiveId(currentActiveId);
+        return {
+          id,
+          text: elem.innerText || elem.textContent,
+          level: elem.tagName.toLowerCase()
+        };
+      });
+
+      setHeadings(headingData);
     };
 
-    window.addEventListener('scroll', handleScroll);
-    handleScroll(); // Call once to set initial active state
+    // Run extraction immediately and on next tick to catch async DOM insertions
+    extractHeadings();
+    const timer = setTimeout(extractHeadings, 200);
 
-    return () => window.removeEventListener('scroll', handleScroll);
+    const handleScroll = () => {
+      const headingsOnPage = Array.from(document.querySelectorAll(`${contentSelector} h2, ${contentSelector} h3`));
+      if (headingsOnPage.length === 0) return;
+
+      const scrollPos = window.scrollY + 120;
+      let currentId = '';
+
+      for (let i = 0; i < headingsOnPage.length; i++) {
+        const el = headingsOnPage[i];
+        if (el.offsetTop <= scrollPos) {
+          currentId = el.id;
+        }
+      }
+
+      if (currentId) {
+        setActiveId(currentId);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, [contentSelector]);
 
   if (headings.length === 0) return null;
 
   return (
-    <div className="editorial-toc">
+    <nav className="editorial-toc" aria-label="Table of Contents">
       <h4 className="toc-title">IN THIS ARTICLE</h4>
       <ul className="toc-list">
         {headings.map((heading) => (
-          <li key={heading.id} className={`toc-item ${activeId === heading.id ? 'active' : ''}`}>
+          <li 
+            key={heading.id} 
+            className={`toc-item ${heading.level === 'h3' ? 'toc-h3' : ''} ${activeId === heading.id ? 'active' : ''}`}
+          >
             <a 
               href={`#${heading.id}`}
               onClick={(e) => {
                 e.preventDefault();
                 const element = document.getElementById(heading.id);
                 if (element) {
-                  window.scrollTo({
-                    top: element.offsetTop - 80,
-                    behavior: 'smooth'
-                  });
+                  const y = element.getBoundingClientRect().top + window.pageYOffset - 90;
+                  window.scrollTo({ top: y, behavior: 'smooth' });
                 }
               }}
             >
@@ -72,6 +93,6 @@ export default function TableOfContents({ contentSelector }) {
           </li>
         ))}
       </ul>
-    </div>
+    </nav>
   );
 }

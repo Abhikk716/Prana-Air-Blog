@@ -88,6 +88,14 @@ const PostSchema = new mongoose.Schema(
       endDate: { type: Date, default: null },
       isActive: { type: Boolean, default: false }
     },
+    story: {
+      isActive: { type: Boolean, default: false },
+      imageUrl: { type: String, default: '' },
+      title: { type: String, default: '' },
+      link: { type: String, default: '' },
+      endDate: { type: Date, default: null },
+      order: { type: Number, default: 0 }
+    },
     publishedAt: {
       type: Date,
       default: null,

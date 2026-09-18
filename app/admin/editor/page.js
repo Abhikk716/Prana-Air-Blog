@@ -232,6 +232,14 @@ function BlogEditorContent() {
   const [promoPlacement, setPromoPlacement] = useState('sidebar');
   const [promoEndDate, setPromoEndDate] = useState('');
   const [promoActive, setPromoActive] = useState(false);
+
+  // Story State (Featured Story on main blog page)
+  const [storyImage, setStoryImage] = useState('');
+  const [storyTitle, setStoryTitle] = useState('');
+  const [storyLink, setStoryLink] = useState('');
+  const [storyEndDate, setStoryEndDate] = useState('');
+  const [storyActive, setStoryActive] = useState(false);
+  const [promoCardTab, setPromoCardTab] = useState('story'); // 'story' | 'banner'
   const [aiLoading, setAiLoading] = useState('');
   const [aiProgress, setAiProgress] = useState('');
   const [aiSteps, setAiSteps] = useState([]);          // Auto-Fix pipeline tracker
@@ -671,6 +679,15 @@ function BlogEditorContent() {
             setPromoActive(post.promotion.isActive || false);
             if (post.promotion.endDate) {
               setPromoEndDate(new Date(post.promotion.endDate).toISOString().split('T')[0]);
+            }
+          }
+          if (post.story) {
+            setStoryActive(post.story.isActive || false);
+            setStoryTitle(post.story.title || '');
+            setStoryImage(post.story.imageUrl || '');
+            setStoryLink(post.story.link || '');
+            if (post.story.endDate) {
+              setStoryEndDate(new Date(post.story.endDate).toISOString().split('T')[0]);
             }
           }
           setIsSlugLocked(true);
@@ -1167,6 +1184,41 @@ function BlogEditorContent() {
     };
   };
 
+  const handleStoryImageUpload = () => {
+    const input = document.createElement('input');
+    input.setAttribute('type', 'file');
+    input.setAttribute('accept', 'image/*');
+    input.click();
+
+    input.onchange = async () => {
+      const file = input.files[0];
+      if (file) {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        showNotification('Uploading story image...', 'success');
+
+        try {
+          const res = await fetch('/api/admin/upload', {
+            method: 'POST',
+            body: formData,
+          });
+          const data = await res.json();
+
+          if (res.ok && data.success) {
+            setStoryImage(data.url);
+            showNotification('Story image uploaded successfully!');
+          } else {
+            showNotification(data.error || 'Upload failed.', 'error');
+          }
+        } catch (err) {
+          console.error(err);
+          showNotification('Network error during upload.', 'error');
+        }
+      }
+    };
+  };
+
   const handleAddCategory = (e) => {
     e.preventDefault();
     if (newCategory.trim() && !categories.includes(newCategory.trim())) {
@@ -1274,6 +1326,13 @@ function BlogEditorContent() {
         placement: promoPlacement,
         endDate: promoEndDate ? new Date(promoEndDate) : null,
         isActive: promoActive
+      },
+      story: {
+        imageUrl: storyImage || featuredImage,
+        title: storyTitle || (editorData.en?.title || ''),
+        link: storyLink || (slug ? `/test-blog/${slug}` : ''),
+        endDate: storyEndDate ? new Date(storyEndDate) : null,
+        isActive: storyActive
       },
       translations: payloadTranslations
     };
@@ -1476,9 +1535,9 @@ function BlogEditorContent() {
           <p>{postId ? 'Update post content and SEO configs in MongoDB' : 'Draft and publish blog content directly to your MongoDB database'}</p>
         </div>
         <div className="action-buttons">
-          {postId && slug && (
+          {postId && (
             <a
-              href={selectedLang === 'en' ? `/test-blog/${slug}` : `/test-blog/${slug}?lang=${selectedLang}`}
+              href={selectedLang === 'en' ? `/${process.env.NEXT_PUBLIC_CMS_SLUG || 'pranaair-cms'}/preview?id=${postId}` : `/${process.env.NEXT_PUBLIC_CMS_SLUG || 'pranaair-cms'}/preview?id=${postId}&lang=${selectedLang}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-secondary"
@@ -2851,51 +2910,185 @@ function BlogEditorContent() {
           </div>
 
           <div className="sidebar-card">
-            <h3 className="sidebar-card-title">Product Promotion Banner</h3>
-
-            <div className="form-group">
-              <label className="form-label">Banner Image URL</label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input type="text" className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', flexGrow: 1 }} placeholder="Image URL or upload..." value={promoImage} onChange={(e) => setPromoImage(e.target.value)} />
+            <div style={{ marginBottom: '1rem', borderBottom: '1px solid #e5e7eb', paddingBottom: '0.75rem' }}>
+              <h3 className="sidebar-card-title" style={{ marginBottom: '0.6rem' }}>Promotions & Story</h3>
+              <div style={{ display: 'flex', width: '100%', background: '#f3f4f6', padding: '0.25rem', borderRadius: '0.5rem', gap: '0.25rem' }}>
                 <button
                   type="button"
-                  onClick={handlePromoImageUpload}
-                  className="btn btn-secondary"
-                  style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.25rem', whiteSpace: 'nowrap' }}
+                  onClick={() => setPromoCardTab('story')}
+                  style={{
+                    flex: 1,
+                    padding: '0.45rem 0.5rem',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    cursor: 'pointer',
+                    background: promoCardTab === 'story' ? '#fff' : 'transparent',
+                    color: promoCardTab === 'story' ? '#111827' : '#6b7280',
+                    boxShadow: promoCardTab === 'story' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.3rem'
+                  }}
                 >
-                  Upload
+                  Featured Story {storyActive && <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: '#10b981' }}></span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPromoCardTab('banner')}
+                  style={{
+                    flex: 1,
+                    padding: '0.45rem 0.5rem',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    border: 'none',
+                    borderRadius: '0.375rem',
+                    cursor: 'pointer',
+                    background: promoCardTab === 'banner' ? '#fff' : 'transparent',
+                    color: promoCardTab === 'banner' ? '#111827' : '#6b7280',
+                    boxShadow: promoCardTab === 'banner' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.3rem'
+                  }}
+                >
+                  Banner {promoActive && <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: '#10b981' }}></span>}
                 </button>
               </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Promotion Text</label>
-              <input type="text" className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }} placeholder="Get 20% off..." value={promoText} onChange={(e) => setPromoText(e.target.value)} />
-            </div>
+            {promoCardTab === 'story' ? (
+              <div>
+                <div className="form-group">
+                  <label className="form-label">Story Image URL (9:16 vertical or card)</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input
+                      type="text"
+                      className="input-text"
+                      style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', flexGrow: 1 }}
+                      placeholder="Story image URL (defaults to Featured Image)"
+                      value={storyImage}
+                      onChange={(e) => setStoryImage(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleStoryImageUpload}
+                      className="btn btn-secondary"
+                      style={{ padding: '0.5rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', whiteSpace: 'nowrap', fontSize: '0.8rem' }}
+                    >
+                      Upload
+                    </button>
+                  </div>
+                  {featuredImage && !storyImage && (
+                    <small style={{ color: '#6b7280', fontSize: '0.75rem', display: 'block', marginTop: '0.25rem' }}>
+                      Using post featured image by default.
+                    </small>
+                  )}
+                </div>
 
-            <div className="form-group">
-              <label className="form-label">Destination Link</label>
-              <input type="url" className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }} placeholder="https://..." value={promoLink} onChange={(e) => setPromoLink(e.target.value)} />
-            </div>
+                <div className="form-group">
+                  <label className="form-label">Story Title</label>
+                  <input
+                    type="text"
+                    className="input-text"
+                    style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
+                    placeholder="Story Title (defaults to post title)"
+                    value={storyTitle}
+                    onChange={(e) => setStoryTitle(e.target.value)}
+                  />
+                </div>
 
-            <div className="form-group">
-              <label className="form-label">Placement</label>
-              <select className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', backgroundColor: '#fff' }} value={promoPlacement} onChange={(e) => setPromoPlacement(e.target.value)}>
-                <option value="sidebar">Sidebar</option>
-                <option value="post_top">Inside Post (Top)</option>
-                <option value="post_bottom">Inside Post (Bottom)</option>
-              </select>
-            </div>
+                <div className="form-group">
+                  <label className="form-label">Story Destination Link</label>
+                  <input
+                    type="text"
+                    className="input-text"
+                    style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
+                    placeholder={slug ? `/test-blog/${slug}` : 'https://...'}
+                    value={storyLink}
+                    onChange={(e) => setStoryLink(e.target.value)}
+                  />
+                </div>
 
-            <div className="form-group">
-              <label className="form-label">End Date</label>
-              <input type="date" className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }} value={promoEndDate} onChange={(e) => setPromoEndDate(e.target.value)} />
-            </div>
+                <div className="form-group">
+                  <label className="form-label">Schedule End Date (Story Expiry)</label>
+                  <input
+                    type="date"
+                    className="input-text"
+                    style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }}
+                    value={storyEndDate}
+                    onChange={(e) => setStoryEndDate(e.target.value)}
+                  />
+                  <small style={{ color: '#6b7280', fontSize: '0.75rem', display: 'block', marginTop: '0.25rem' }}>
+                    Story will automatically hide after this date.
+                  </small>
+                </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem' }}>
-              <input type="checkbox" id="promoActive" checked={promoActive} onChange={(e) => setPromoActive(e.target.checked)} style={{ width: '16px', height: '16px' }} />
-              <label htmlFor="promoActive" style={{ fontWeight: 600, fontSize: '0.875rem' }}>Enable Banner for this post</label>
-            </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.75rem', padding: '0.5rem', background: storyActive ? '#ecfdf5' : '#f9fafb', borderRadius: '0.375rem', border: storyActive ? '1px solid #a7f3d0' : '1px solid #e5e7eb' }}>
+                  <input
+                    type="checkbox"
+                    id="storyActive"
+                    checked={storyActive}
+                    onChange={(e) => setStoryActive(e.target.checked)}
+                    style={{ width: '16px', height: '16px', accentColor: '#059669' }}
+                  />
+                  <label htmlFor="storyActive" style={{ fontWeight: 600, fontSize: '0.875rem', color: storyActive ? '#065f46' : '#374151', cursor: 'pointer' }}>
+                    Enable Featured Story on Blog Page
+                  </label>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="form-group">
+                  <label className="form-label">Banner Image URL</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input type="text" className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', flexGrow: 1 }} placeholder="Image URL or upload..." value={promoImage} onChange={(e) => setPromoImage(e.target.value)} />
+                    <button
+                      type="button"
+                      onClick={handlePromoImageUpload}
+                      className="btn btn-secondary"
+                      style={{ padding: '0.5rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', whiteSpace: 'nowrap', fontSize: '0.8rem' }}
+                    >
+                      Upload
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Promotion Text</label>
+                  <input type="text" className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }} placeholder="Get 20% off..." value={promoText} onChange={(e) => setPromoText(e.target.value)} />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Destination Link</label>
+                  <input type="url" className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }} placeholder="https://..." value={promoLink} onChange={(e) => setPromoLink(e.target.value)} />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Placement</label>
+                  <select className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem', backgroundColor: '#fff' }} value={promoPlacement} onChange={(e) => setPromoPlacement(e.target.value)}>
+                    <option value="sidebar">Sidebar</option>
+                    <option value="post_top">Inside Post (Top)</option>
+                    <option value="post_bottom">Inside Post (Bottom)</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">End Date</label>
+                  <input type="date" className="input-text" style={{ padding: '0.5rem 0.75rem', fontSize: '0.875rem' }} value={promoEndDate} onChange={(e) => setPromoEndDate(e.target.value)} />
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.75rem', padding: '0.5rem', background: promoActive ? '#ecfdf5' : '#f9fafb', borderRadius: '0.375rem', border: promoActive ? '1px solid #a7f3d0' : '1px solid #e5e7eb' }}>
+                  <input type="checkbox" id="promoActive" checked={promoActive} onChange={(e) => setPromoActive(e.target.checked)} style={{ width: '16px', height: '16px', accentColor: '#059669' }} />
+                  <label htmlFor="promoActive" style={{ fontWeight: 600, fontSize: '0.875rem', color: promoActive ? '#065f46' : '#374151', cursor: 'pointer' }}>Enable Banner for this post</label>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

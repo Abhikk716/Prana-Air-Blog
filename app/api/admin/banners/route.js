@@ -28,7 +28,7 @@ export async function POST(req) {
 
     await connectDB();
     const data = await req.json();
-    const { _id, type, name, categories, promotion } = data;
+    const { _id, type, name, categories, targetPosts, promotion } = data;
 
     if (!type || (type === 'category' && (!categories || categories.length === 0))) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
@@ -39,7 +39,8 @@ export async function POST(req) {
       banner = await BannerSettings.findById(_id);
       if (banner) {
         banner.name = name;
-        banner.categories = categories;
+        banner.categories = categories || [];
+        banner.targetPosts = targetPosts || [];
         banner.promotion = promotion;
         await banner.save();
       }
@@ -52,7 +53,7 @@ export async function POST(req) {
         banner = await BannerSettings.create({ type, promotion });
       }
     } else {
-      banner = await BannerSettings.create({ type, name, categories, promotion });
+      banner = await BannerSettings.create({ type, name, categories: categories || [], targetPosts: targetPosts || [], promotion });
     }
 
     return NextResponse.json({ success: true, banner });

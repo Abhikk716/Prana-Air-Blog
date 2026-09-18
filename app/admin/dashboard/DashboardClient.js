@@ -224,7 +224,16 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
         type: 'category',
         name: 'New Campaign',
         categories: [],
+        targetPosts: [],
         promotion: { imageUrl: '', text: '', link: '', placement: 'sidebar', endDate: '', isActive: false }
+      });
+    } else if (id === 'new-story') {
+      setEditingBanner({
+        type: 'story',
+        name: 'New Story Campaign',
+        categories: [],
+        targetPosts: [],
+        promotion: { imageUrl: '', text: '', link: '', placement: 'story', endDate: '', isActive: false }
       });
     } else {
       const existing = banners.find(b => b._id === id);
@@ -258,6 +267,17 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
         return { ...prev, categories: currentCats.filter(c => c !== cat) };
       } else {
         return { ...prev, categories: [...currentCats, cat] };
+      }
+    });
+  };
+
+  const handleTargetPostCheckbox = (postId) => {
+    setEditingBanner(prev => {
+      const currentPosts = prev.targetPosts || [];
+      if (currentPosts.includes(postId)) {
+        return { ...prev, targetPosts: currentPosts.filter(p => p !== postId) };
+      } else {
+        return { ...prev, targetPosts: [...currentPosts, postId] };
       }
     });
   };
@@ -761,7 +781,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                         <td className="col-actions">
                           <div className="row-actions">
                             <a href={editorHref(post)} className="row-action edit">Edit</a>
-                            <a href={`/test-blog/${post.slug}`} target="_blank" rel="noopener noreferrer" className="row-action view" title="Open preview in a new tab" aria-label="Open preview in a new tab">
+                            <a href={`/${process.env.NEXT_PUBLIC_CMS_SLUG || 'pranaair-cms'}/preview?id=${post._id}`} target="_blank" rel="noopener noreferrer" className="row-action view" title="Open preview in a new tab" aria-label="Open preview in a new tab">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
                               </svg>
@@ -824,12 +844,25 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
 
       {activeTab === 'banners' && (
         <div style={{ padding: '1rem 0' }}>
-          <div className="banner-tabs">
+          <div className="banner-tabs" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center' }}>
             <button
               onClick={() => loadBannerToEdit('global')}
               className={`banner-tab${activeBannerTab === 'global' ? ' active' : ''}`}
             >
-              Global Banner
+              🌐 Global Banner
+            </button>
+            <button
+              onClick={() => loadBannerToEdit('new')}
+              className={`banner-tab banner-tab-new${activeBannerTab === 'new' ? ' active' : ''}`}
+            >
+              + Category Campaign
+            </button>
+            <button
+              onClick={() => loadBannerToEdit('new-story')}
+              className={`banner-tab banner-tab-new${activeBannerTab === 'new-story' ? ' active' : ''}`}
+              style={{ background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0' }}
+            >
+              + Story Campaign
             </button>
             {bannerSettings.filter(b => b.type === 'category').map((banner) => (
               <button
@@ -837,61 +870,106 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 onClick={() => loadBannerToEdit(banner._id)}
                 className={`banner-tab${activeBannerTab === banner._id ? ' active' : ''}`}
               >
-                {banner.name || 'Unnamed Campaign'}
+                📁 {banner.name || 'Unnamed Campaign'}
               </button>
             ))}
-            <button
-              onClick={() => loadBannerToEdit('new')}
-              className={`banner-tab banner-tab-new${activeBannerTab === 'new' ? ' active' : ''}`}
-            >
-              + Create Campaign
-            </button>
+            {bannerSettings.filter(b => b.type === 'story' || b.promotion?.placement === 'story').map((banner) => (
+              <button
+                key={banner._id}
+                onClick={() => loadBannerToEdit(banner._id)}
+                className={`banner-tab${activeBannerTab === banner._id ? ' active' : ''}`}
+                style={{ borderColor: activeBannerTab === banner._id ? '#74b75c' : '#d1fae5' }}
+              >
+                🎬 {banner.name || 'Story Campaign'}
+              </button>
+            ))}
           </div>
 
-          <div className="banner-form-card">
+          <div className="banner-form-card" style={{ marginTop: '1rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', margin: 0 }}>
-                {editingBanner.type === 'global' ? 'Global Banner Settings' : (editingBanner._id ? 'Edit Campaign' : 'New Campaign')}
-              </h3>
-              {editingBanner.type === 'category' && editingBanner._id && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', margin: 0 }}>
+                  {editingBanner.type === 'global'
+                    ? 'Global Banner Settings'
+                    : editingBanner.type === 'story'
+                    ? (editingBanner._id ? 'Edit Story Campaign' : 'New Story Campaign')
+                    : (editingBanner._id ? 'Edit Category Campaign' : 'New Category Campaign')}
+                </h3>
+                {editingBanner.type !== 'global' && (
+                  <span style={{
+                    fontSize: '0.75rem',
+                    padding: '0.2rem 0.6rem',
+                    borderRadius: '999px',
+                    fontWeight: 600,
+                    background: editingBanner.type === 'story' ? '#ecfdf5' : '#eff6ff',
+                    color: editingBanner.type === 'story' ? '#065f46' : '#1e40af'
+                  }}>
+                    {editingBanner.type === 'story' ? 'Featured Story Campaign' : 'Category Banner'}
+                  </span>
+                )}
+              </div>
+              {editingBanner.type !== 'global' && editingBanner._id && (
                 <button onClick={handleBannerDelete} style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 600, cursor: 'pointer' }}>Delete Campaign</button>
               )}
             </div>
 
             <div className="banner-form-grid">
-              {editingBanner.type === 'category' && (
-                <>
-                  <div className="banner-field">
-                    <label>Campaign Name</label>
-                    <input
-                      type="text"
-                      value={editingBanner.name || ''}
-                      onChange={e => setEditingBanner({ ...editingBanner, name: e.target.value })}
-                      placeholder="e.g. Summer Sale 2026"
-                    />
-                  </div>
+              {editingBanner.type !== 'global' && (
+                <div className="banner-field">
+                  <label>Campaign Type</label>
+                  <select
+                    value={editingBanner.type || 'category'}
+                    onChange={e => {
+                      const newType = e.target.value;
+                      setEditingBanner(prev => ({
+                        ...prev,
+                        type: newType,
+                        promotion: {
+                          ...prev.promotion,
+                          placement: newType === 'story' ? 'story' : (prev.promotion?.placement === 'story' ? 'sidebar' : prev.promotion?.placement || 'sidebar')
+                        }
+                      }));
+                    }}
+                  >
+                    <option value="category">Category Banner Campaign</option>
+                    <option value="story">Featured Story Carousel Campaign</option>
+                  </select>
+                </div>
+              )}
 
-                  <div className="banner-field">
-                    <label>Target Categories</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f9fafb', padding: '1rem', borderRadius: '9px', border: '1px solid #e5e7eb', maxHeight: '200px', overflowY: 'auto' }}>
-                      {categories.map((cat, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <input
-                            type="checkbox"
-                            id={`cat-${i}`}
-                            checked={(editingBanner.categories || []).includes(cat)}
-                            onChange={() => handleCategoryCheckbox(cat)}
-                          />
-                          <label htmlFor={`cat-${i}`} style={{ fontSize: '0.9rem', color: '#4b5563', fontWeight: 400, marginBottom: 0, display: 'inline' }}>{cat}</label>
-                        </div>
-                      ))}
-                    </div>
+              {editingBanner.type !== 'global' && (
+                <div className="banner-field">
+                  <label>Campaign / Story Name</label>
+                  <input
+                    type="text"
+                    value={editingBanner.name || ''}
+                    onChange={e => setEditingBanner({ ...editingBanner, name: e.target.value })}
+                    placeholder={editingBanner.type === 'story' ? 'e.g. Clean Air Awareness Story' : 'e.g. Summer Sale 2026'}
+                  />
+                </div>
+              )}
+
+              {editingBanner.type === 'category' && (
+                <div className="banner-field">
+                  <label>Target Categories</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', background: '#f9fafb', padding: '1rem', borderRadius: '9px', border: '1px solid #e5e7eb', maxHeight: '180px', overflowY: 'auto' }}>
+                    {categories.map((cat, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <input
+                          type="checkbox"
+                          id={`cat-${i}`}
+                          checked={(editingBanner.categories || []).includes(cat)}
+                          onChange={() => handleCategoryCheckbox(cat)}
+                        />
+                        <label htmlFor={`cat-${i}`} style={{ fontSize: '0.9rem', color: '#4b5563', fontWeight: 400, marginBottom: 0, display: 'inline' }}>{cat}</label>
+                      </div>
+                    ))}
                   </div>
-                </>
+                </div>
               )}
 
               <div className="banner-field">
-                <label>Image URL</label>
+                <label>Image URL {editingBanner.type === 'story' ? '(9:16 Story Card)' : ''}</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <input
                     type="text"
@@ -912,12 +990,12 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
               </div>
 
               <div className="banner-field">
-                <label>Promotion Text</label>
+                <label>{editingBanner.type === 'story' ? 'Story Title / Caption' : 'Promotion Text'}</label>
                 <input
                   type="text"
                   value={editingBanner.promotion?.text || ''}
                   onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, text: e.target.value } })}
-                  placeholder="Get 20% off..."
+                  placeholder={editingBanner.type === 'story' ? 'e.g. 10 Ways To Clean Indoor Air...' : 'Get 20% off...'}
                 />
               </div>
 
@@ -927,47 +1005,54 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                   type="text"
                   value={editingBanner.promotion?.link || ''}
                   onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, link: e.target.value } })}
-                  placeholder="https://..."
+                  placeholder="https://... or /test-blog/post-slug"
                 />
               </div>
 
-              <div className="banner-field">
-                <label>Placement</label>
-                <select
-                  value={editingBanner.promotion?.placement || 'sidebar'}
-                  onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, placement: e.target.value } })}
-                >
-                  <option value="sidebar">Sidebar</option>
-                  <option value="post_top">Inside Post (Top)</option>
-                  <option value="post_bottom">Inside Post (Bottom)</option>
-                </select>
-              </div>
+              {editingBanner.type !== 'story' && (
+                <div className="banner-field">
+                  <label>Placement</label>
+                  <select
+                    value={editingBanner.promotion?.placement || 'sidebar'}
+                    onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, placement: e.target.value } })}
+                  >
+                    <option value="sidebar">Sidebar</option>
+                    <option value="post_top">Inside Post (Top)</option>
+                    <option value="post_bottom">Inside Post (Bottom)</option>
+                  </select>
+                </div>
+              )}
 
               <div className="banner-field">
-                <label>End Date</label>
+                <label>Schedule End Date (Automatic Expiry)</label>
                 <input
                   type="date"
                   value={editingBanner.promotion?.endDate ? new Date(editingBanner.promotion.endDate).toISOString().split('T')[0] : ''}
                   onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, endDate: e.target.value } })}
                 />
+                <small style={{ color: '#6b7280', fontSize: '0.8rem', marginTop: '0.25rem', display: 'block' }}>
+                  Story/Banner will automatically hide after this date.
+                </small>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: editingBanner.promotion?.isActive ? '#ecfdf5' : '#f9fafb', borderRadius: '8px', border: editingBanner.promotion?.isActive ? '1px solid #a7f3d0' : '1px solid #e5e7eb' }}>
                 <input
                   type="checkbox"
                   id="isActive"
                   checked={editingBanner.promotion?.isActive || false}
                   onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, isActive: e.target.checked } })}
-                  style={{ width: '1.25rem', height: '1.25rem' }}
+                  style={{ width: '1.25rem', height: '1.25rem', accentColor: '#059669' }}
                 />
-                <label htmlFor="isActive" style={{ fontWeight: 600, color: '#4b5563', marginBottom: 0 }}>Enable this banner</label>
+                <label htmlFor="isActive" style={{ fontWeight: 600, color: editingBanner.promotion?.isActive ? '#065f46' : '#4b5563', marginBottom: 0, cursor: 'pointer' }}>
+                  Enable this {editingBanner.type === 'story' ? 'story' : 'banner'}
+                </label>
               </div>
 
               <button
                 onClick={handleSaveBanner}
                 style={{ marginTop: '1rem', padding: '0.75rem 1.5rem', background: 'linear-gradient(135deg, #74b75c, #5e9e48)', color: 'white', border: 'none', borderRadius: '9px', fontWeight: 600, cursor: 'pointer', fontSize: '1rem', width: 'fit-content', boxShadow: '0 4px 10px rgba(116, 183, 92, 0.25)' }}
               >
-                Save Banner
+                Save {editingBanner.type === 'story' ? 'Story Campaign' : 'Banner'}
               </button>
             </div>
           </div>

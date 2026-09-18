@@ -61,8 +61,8 @@ export async function GET(request, { params }) {
     let post = JSON.parse(JSON.stringify(rawPost.toObject({ getters: true, flattenMaps: true })));
     
     let promotions = [];
-    if (post.promotion && post.promotion.isActive && post.promotion.endDate) {
-      if (new Date(post.promotion.endDate) >= new Date()) {
+    if (post.promotion && post.promotion.isActive) {
+      if (!post.promotion.endDate || new Date(post.promotion.endDate) >= new Date()) {
         promotions.push(post.promotion);
       }
     }
@@ -187,6 +187,19 @@ export async function PUT(request, { params }) {
       }
     } catch (scoreErr) {
       console.error('Post updated but scoring failed:', scoreErr);
+    }
+
+    // Trigger instant frontend revalidation and cache clearing
+    try {
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const secret = process.env.BLOG_REVALIDATE_SECRET || 'kvgxx9053m0tNdDFjYcNE1UCj4dpSGHd';
+      fetch(`${frontendUrl}/api/revalidate-blog?secret=${secret}&slug=${encodeURIComponent(post.slug)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret, slug: post.slug })
+      }).catch(() => {});
+    } catch (revalErr) {
+      // ignore
     }
 
     return Response.json({ success: true, data: post });

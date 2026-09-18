@@ -4,7 +4,7 @@ const BannerSettingsSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ['global', 'category'],
+      enum: ['global', 'category', 'story'],
       required: true,
     },
     name: {
@@ -15,11 +15,15 @@ const BannerSettingsSchema = new mongoose.Schema(
       type: [String],
       default: []
     },
+    targetPosts: {
+      type: [String], // Post IDs or slugs targeted by campaign
+      default: []
+    },
     promotion: {
       imageUrl: { type: String, default: '' },
       text: { type: String, default: '' },
       link: { type: String, default: '' },
-      placement: { type: String, enum: ['sidebar', 'post_top', 'post_bottom'], default: 'sidebar' },
+      placement: { type: String, enum: ['sidebar', 'post_top', 'post_bottom', 'story'], default: 'sidebar' },
       endDate: { type: Date, default: null },
       isActive: { type: Boolean, default: false }
     }

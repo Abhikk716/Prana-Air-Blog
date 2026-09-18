@@ -15,6 +15,7 @@ export default function AppShell({ children }) {
   // The editor and the dashboard both need the wide (1600px) layout: the
   // posts table has nine columns and gets clipped in the default 1200px.
   const isEditor = pathname?.startsWith('/admin/editor') || pathname?.startsWith('/admin/dashboard');
+  const isBlog = pathname?.startsWith('/pranaair-cms') || pathname?.startsWith('/preview');
 
   if (hideChrome) {
     return <main className="main-content">{children}</main>;
@@ -22,8 +23,8 @@ export default function AppShell({ children }) {
 
   return (
     <>
-      <header className={`main-header ${isEditor ? 'header-full' : ''}`}>
-        <div className={`header-container ${isEditor ? 'header-container-full' : ''}`}>
+      <header className={`main-header ${isEditor || isBlog ? 'header-full' : ''}`}>
+        <div className={`header-container ${isEditor || isBlog ? 'header-container-full' : ''}`}>
           <a href="/" className="logo">
             Prana Air <span className="logo-accent">Blog</span>
           </a>
@@ -33,12 +34,12 @@ export default function AppShell({ children }) {
         </div>
       </header>
 
-      <main className={`main-content ${isEditor ? 'main-content-full' : ''}`}>
+      <main className={`main-content ${isEditor ? 'main-content-full' : ''} ${isBlog ? 'main-content-blog' : ''}`}>
         {children}
       </main>
 
       <footer className="main-footer">
-        <div className={`footer-container ${isEditor ? 'footer-container-full' : ''}`}>
+        <div className={`footer-container ${isEditor || isBlog ? 'footer-container-full' : ''}`}>
           <div className="footer-info">
             <h3>Prana Air</h3>
             <p>Empowering you to breathe clean air through advanced monitoring and purification technology.</p>
