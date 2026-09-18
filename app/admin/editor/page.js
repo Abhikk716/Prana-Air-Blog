@@ -1040,40 +1040,6 @@ function BlogEditorContent() {
     }));
   };
 
-  // Recovers the image's original alt text from the WordPress media library
-  // (see /api/admin/media-alt). Runs automatically (see the effect below);
-  // it only prefills an empty field, and the Save button commits the value.
-  const fetchOriginalAltText = async (src) => {
-    const imageSrc = (src || '').trim();
-    if (!imageSrc) return;
-    setAltLookupLoading(true);
-    try {
-      const res = await fetch(`/api/admin/media-alt?src=${encodeURIComponent(imageSrc)}`);
-      const result = await res.json();
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || 'Lookup failed.');
-      }
-      // The author may have started typing while this was in flight.
-      if (result.alt && !featuredImageAltRef.current.trim()) {
-        setFeaturedImageAlt(result.alt);
-        setAltHint('Original alt text from the source image — click Save to keep it.');
-      }
-    } catch (err) {
-      console.error('Original alt lookup error:', err);
-    } finally {
-      setAltLookupLoading(false);
-    }
-  };
-
-  // Whenever a WordPress-hosted image is set and there's no alt text yet,
-  // fetch the original alt from the source automatically. Debounced so
-  // typing a URL doesn't fire a lookup per keystroke.
-  useEffect(() => {
-    if (!featuredImage || featuredImageAltRef.current.trim() || !/wp-content\/uploads\//i.test(featuredImage)) return;
-    const timer = setTimeout(() => fetchOriginalAltText(featuredImage), 600);
-    return () => clearTimeout(timer);
-  }, [featuredImage]);
-
   // Saves only the featured image + alt text on an existing post. It's a
   // partial update, so status, publishedAt and translations are untouched;
   // the full "Save"/"Publish" buttons still send everything.
