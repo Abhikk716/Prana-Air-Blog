@@ -5,13 +5,13 @@ name: Deploy to Dev
 
 on:
   push:
-    branches: ["production"]
+    branches: ["production", "main"]
   pull_request:
-    branches: ["production"]
+    branches: ["production", "main"]
 
 jobs:
   build:
-    runs-on: pranaair-cms
+    runs-on: ${{ github.ref_name == 'main' && 'pranaair-cms-dev' || 'pranaair-cms' }}
 
     strategy:
       matrix:
@@ -33,6 +33,7 @@ jobs:
         run: |
           # Create and populate the .env file with required environment variables
           cat <<EOF > .env
+          NEXT_PUBLIC_DOMAIN=${{ github.ref_name == 'main' && secrets.NEXT_PUBLIC_DOMAIN_DEV || secrets.NEXT_PUBLIC_DOMAIN }}
           MONGODB_URI=${{ secrets.MONGODB_URI }}
           WP_API_URL=${{ secrets.WP_API_URL }}
           ADMIN_USERNAME=${{ secrets.ADMIN_USERNAME }}
