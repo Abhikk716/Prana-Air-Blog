@@ -1,4 +1,5 @@
 'use client';
+import { domainName } from '../../../config';
 
 import React, { useState, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -30,7 +31,7 @@ const allLanguages = [
 // with exponential backoff before giving up on it. `signal` lets the caller
 // cancel an in-flight or not-yet-started request (Cancel button).
 async function fetchTranslation({ title, excerpt, content, lang, signal }, attempt = 0) {
-  const res = await fetch('/cms/api/translate', {
+  const res = await fetch(`${domainName}/api/translate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title, excerpt, content, targetLanguage: lang }),
@@ -540,13 +541,13 @@ function BlogEditorContent() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await fetch('/cms/api/admin/check-auth');
+        const res = await fetch(`${domainName}/api/admin/check-auth`);
         if (!res.ok) {
           router.push('/admin/login');
         } else {
           setAuthChecked(true);
           // Fetch existing categories for the dropdown
-          fetch('/cms/api/posts/meta')
+          fetch(`${domainName}/api/posts/meta`)
             .then(r => r.json())
             .then(data => {
               if (data.success && data.data && data.data.categories) {
@@ -556,7 +557,7 @@ function BlogEditorContent() {
             .catch(console.error);
 
           // Fetch existing posts for keyword cannibalization checks
-          fetch('/cms/api/posts?limit=100')
+          fetch(`${domainName}/api/posts?limit=100`)
             .then(r => r.json())
             .then(data => {
               if (data.success && Array.isArray(data.data)) {
@@ -579,7 +580,7 @@ function BlogEditorContent() {
 
     const fetchPost = async () => {
       try {
-        const res = await fetch(`/cms/api/posts/${postId}`);
+        const res = await fetch(`${domainName}/api/posts/${postId}`);
         const data = await res.json();
 
         if (res.ok && data.success) {
@@ -730,7 +731,7 @@ function BlogEditorContent() {
   // send its in-progress draft instead of React state, which is still stale
   // mid-pipeline because setState hasn't flushed between steps.
   const requestAiFix = async (actionType, overrides = {}) => {
-    const res = await fetch('/cms/api/ai/fix-seo', {
+    const res = await fetch(`${domainName}/api/ai/fix-seo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1051,7 +1052,7 @@ function BlogEditorContent() {
     const nextAlt = featuredImageAlt.trim();
     setAltSaveState('saving');
     try {
-      const res = await fetch(`/cms/api/posts/${postId}`, {
+      const res = await fetch(`${domainName}/api/posts/${postId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ featuredImage, featuredImageAlt: nextAlt })
@@ -1095,7 +1096,7 @@ function BlogEditorContent() {
         showNotification('Uploading featured image...', 'success');
 
         try {
-          const res = await fetch('/cms/api/admin/upload', {
+          const res = await fetch(`${domainName}/api/admin/upload`, {
             method: 'POST',
             body: formData,
           });
@@ -1130,7 +1131,7 @@ function BlogEditorContent() {
         showNotification('Uploading promo image...', 'success');
 
         try {
-          const res = await fetch('/cms/api/admin/upload', {
+          const res = await fetch(`${domainName}/api/admin/upload`, {
             method: 'POST',
             body: formData,
           });
@@ -1165,7 +1166,7 @@ function BlogEditorContent() {
         showNotification('Uploading story image...', 'success');
 
         try {
-          const res = await fetch('/cms/api/admin/upload', {
+          const res = await fetch(`${domainName}/api/admin/upload`, {
             method: 'POST',
             body: formData,
           });
@@ -1304,7 +1305,7 @@ function BlogEditorContent() {
     };
 
     try {
-      const url = postId ? `/cms/api/posts/${postId}` : '/cms/api/posts';
+      const url = postId ? `${domainName}/api/posts/${postId}` : `${domainName}/api/posts`;
       const method = postId ? 'PUT' : 'POST';
 
       const res = await fetch(url, {
@@ -1690,9 +1691,13 @@ function BlogEditorContent() {
                       if (on_save) return url;
                       if (!url.startsWith('http') && !url.startsWith('//')) {
                         let cleanSrc = url.startsWith('/') ? url : '/' + url;
-                        // Both wp-content and local uploads are served from /cms
-                        if (cleanSrc.startsWith('/wp-content/') || cleanSrc.startsWith('/uploads/')) {
-                          return '/cms' + cleanSrc;
+                        if (cleanSrc.includes('wp-content/uploads/')) {
+                          const match = cleanSrc.match(/wp-content\/uploads\/.*/);
+                          if (match) return '/cms/' + match[0];
+                        }
+                        if (cleanSrc.includes('uploads/')) {
+                          const match = cleanSrc.match(/uploads\/.*/);
+                          if (match) return '/cms/' + match[0];
                         }
                       }
                       return url;
@@ -1908,7 +1913,7 @@ function BlogEditorContent() {
                         const formData = new FormData();
                         formData.append('file', blobInfo.blob(), blobInfo.filename());
                         try {
-                          const res = await fetch('/cms/api/admin/upload', {
+                          const res = await fetch(`${domainName}/api/admin/upload`, {
                             method: 'POST',
                             body: formData,
                           });

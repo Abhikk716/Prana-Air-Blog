@@ -303,14 +303,10 @@ export default async function WordPressStylePreviewPage(props) {
                 html={post.content
                   .replace(/(https?:\/\/)?(www\.)?prana-air-blog\.vercel\.app\/?(?:test-blog\/|blog\/)?/gi, '/')
                   .replace(/(https?:\/\/)?(www\.)?dev\.pranaair\.com\/?(?:test-blog\/|blog\/)?/gi, '/')
+                  .replace(/(https?:\/\/)?(www\.)?pranaair\.com\/?(?:test-blog\/|blog\/)?/gi, '/')
                   .replace(/(?:\.\.\/)+uploads\//gi, '/cms/uploads/')
+                  .replace(/([^"'\s=]*?)\/?wp-content\/uploads\/([^"'\s>]+)/gi, '/cms/wp-content/uploads/$2')
                   .replace(/([^"'\s=]*?)\/?(?<!wp-content\/)uploads\/([^"'\s>]+)/gi, '/cms/uploads/$2')
-                  .replace(
-                    /([^"'\s=]*?)\/?wp-content\/uploads\/([^"'\s>]+)/gi,
-                    process.env.NEXT_PUBLIC_DOMAIN 
-                      ? `${process.env.NEXT_PUBLIC_DOMAIN.replace(/\/cms\/?$/, '')}/blog/wp-content/uploads/$2`
-                      : '/cms/wp-content/uploads/$2'
-                  )
                   .replace(/\s+srcset="[^"]*"/gi, '')
                   .replace(/\s+sizes="[^"]*"/gi, '')}
               />

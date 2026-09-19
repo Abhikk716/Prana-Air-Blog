@@ -1,4 +1,5 @@
 'use client';
+import { domainName } from '../../../config';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -144,7 +145,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   const fetchBanners = async () => {
     setLoadingBanners(true);
     try {
-      const res = await fetch('/cms/api/admin/banners');
+      const res = await fetch(`${domainName}/api/admin/banners`);
       const data = await res.json();
       if (data.success) {
         setBannerSettings(data.banners);
@@ -167,7 +168,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
         const formData = new FormData();
         formData.append('file', file);
         try {
-          const res = await fetch('/cms/api/admin/upload', { method: 'POST', body: formData });
+          const res = await fetch(`${domainName}/api/admin/upload`, { method: 'POST', body: formData });
           const data = await res.json();
           if (res.ok) {
             setEditingBanner(prev => ({
@@ -190,7 +191,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
 
   const handleSaveBanner = async () => {
     try {
-      const res = await fetch('/cms/api/admin/banners', {
+      const res = await fetch(`${domainName}/api/admin/banners`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editingBanner)
@@ -252,7 +253,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
     if (!confirm('Are you sure you want to delete this banner campaign?')) return;
 
     try {
-      const res = await fetch('/cms/api/admin/banners?id=' + editingBanner._id, { method: 'DELETE' });
+      const res = await fetch(`${domainName}/api/admin/banners?id=` + editingBanner._id, { method: 'DELETE' });
       if (res.ok) {
         fetchBanners();
         setActiveBannerTab('global');
@@ -295,7 +296,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
     setLoadingId(postId);
 
     try {
-      const res = await fetch(`/cms/api/posts/${postId}`, {
+      const res = await fetch(`${domainName}/api/posts/${postId}`, {
         method: 'DELETE',
       });
 
@@ -319,7 +320,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   const handleLogout = async () => {
     setLogoutLoading(true);
     try {
-      const res = await fetch('/cms/api/admin/logout', {
+      const res = await fetch(`${domainName}/api/admin/logout`, {
         method: 'POST',
       });
 
@@ -456,7 +457,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
 
     setBulkLoading(action);
     try {
-      const res = await fetch('/cms/api/admin/posts/bulk', {
+      const res = await fetch(`${domainName}/api/admin/posts/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ids })

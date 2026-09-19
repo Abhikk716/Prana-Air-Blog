@@ -1,4 +1,5 @@
 'use client';
+import { domainName } from '../../../config';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -16,7 +17,7 @@ export default function AdminLogin() {
   // re-submit into a confusing state.
   useEffect(() => {
     let cancelled = false;
-    fetch('/cms/api/admin/check-auth')
+    fetch(`${domainName}/api/admin/check-auth`)
       .then((res) => {
         if (cancelled) return;
         if (res.ok) {
@@ -37,7 +38,7 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      const res = await fetch('/cms/api/admin/login', {
+      const res = await fetch(`${domainName}/api/admin/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

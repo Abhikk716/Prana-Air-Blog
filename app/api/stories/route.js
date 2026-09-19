@@ -48,13 +48,23 @@ export async function GET(req) {
     const formatImageUrl = (url) => {
       if (!url) return '';
       if (url.startsWith('http://') || url.startsWith('https://')) return url;
-      if (url.startsWith('/wp-content/')) {
-        const domain = process.env.NEXT_PUBLIC_DOMAIN ? process.env.NEXT_PUBLIC_DOMAIN.replace(/\/cms\/?$/, '') : 'https://www.pranaair.com';
-        return `${domain}/blog${url}`;
+
+      const cmsBase = process.env.NEXT_PUBLIC_DOMAIN 
+        ? `${process.env.NEXT_PUBLIC_DOMAIN.replace(/\/+$/, '').replace(/\/cms$/, '')}/cms`
+        : (cmsOrigin ? `${cmsOrigin.replace(/\/+$/, '').replace(/\/cms$/, '')}/cms` : '/cms');
+
+      if (url.includes('wp-content/uploads/')) {
+        const match = url.match(/wp-content\/uploads\/.*/);
+        if (match) return `${cmsBase}/${match[0]}`;
       }
-      if (url.startsWith('/uploads/')) return cmsOrigin ? `${cmsOrigin.replace(/\/+$/, '')}${url}` : url;
-      const baseDomain = process.env.NEXT_PUBLIC_DOMAIN ? process.env.NEXT_PUBLIC_DOMAIN.replace(/\/cms\/?$/, '') : 'https://www.pranaair.com';
-      return url.startsWith('/') ? `${baseDomain}${url}` : `${baseDomain}/${url}`;
+
+      if (url.includes('uploads/')) {
+        const match = url.match(/uploads\/.*/);
+        if (match) return `${cmsBase}/${match[0]}`;
+      }
+
+      const cleanPath = url.startsWith('/') ? url : `/${url}`;
+      return cleanPath.startsWith('/cms/') ? `${cmsBase.replace(/\/cms$/, '')}${cleanPath}` : `${cmsBase}${cleanPath}`;
     };
 
     const getTranslatedTitle = (p) => {

@@ -109,16 +109,22 @@ export function PostThumb({ src, alt }) {
       </div>
     );
   }
-  // Normalize missing leading slash for relative paths
-  let cleanSrc = (src && !src.startsWith('http') && !src.startsWith('/')) ? '/' + src : (src || '');
   
+  let cleanSrc = src || '';
   let resolved = cleanSrc;
 
-  if (process.env.NEXT_PUBLIC_DOMAIN && cleanSrc.startsWith('/') && !cleanSrc.startsWith('//')) {
-    resolved = `${process.env.NEXT_PUBLIC_DOMAIN.replace(/\/+$/, '')}${cleanSrc}`;
+  if (cleanSrc.includes('wp-content/uploads/')) {
+    const match = cleanSrc.match(/wp-content\/uploads\/.*/);
+    if (match) {
+      resolved = `/cms/${match[0]}`;
+    }
+  } else if (cleanSrc.includes('uploads/')) {
+    const match = cleanSrc.match(/uploads\/.*/);
+    if (match) {
+      resolved = `/cms/${match[0]}`;
+    }
   } else if (!cleanSrc.startsWith('http')) {
-    // Both wp-content and uploads are served locally via the /cms basePath
-    resolved = `/cms${cleanSrc}`;
+    resolved = cleanSrc.startsWith('/') ? `/cms${cleanSrc}` : `/cms/${cleanSrc}`;
   }
 
   return (
@@ -127,7 +133,7 @@ export function PostThumb({ src, alt }) {
         src={resolved}
         alt={alt || ''}
         loading="lazy"
-        onError={() => setState(prev => (prev === 'ok' ? 'broken' : 'broken'))}
+        onError={() => setState('broken')}
       />
     </div>
   );

@@ -1,4 +1,5 @@
 'use client';
+import { domainName } from '../../config';
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 
@@ -13,7 +14,7 @@ export default function HeaderNav() {
 
   const checkAuth = async () => {
     try {
-      const res = await fetch('/cms/api/admin/check-auth');
+      const res = await fetch(`${domainName}/api/admin/check-auth`);
       if (res.ok) {
         setIsAuthenticated(true);
       } else {
@@ -32,7 +33,7 @@ export default function HeaderNav() {
 
   const handleLogout = async () => {
     try {
-      const res = await fetch('/cms/api/admin/logout', {
+      const res = await fetch(`${domainName}/api/admin/logout`, {
         method: 'POST',
       });
       if (res.ok) {

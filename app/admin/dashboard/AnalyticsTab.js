@@ -1,4 +1,5 @@
 'use client';
+import { domainName } from '../../../config';
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
@@ -423,7 +424,7 @@ export default function AnalyticsTab({ posts, categories = [], bannerSettings = 
     let cancelled = false;
     setLoading(true);
     setError('');
-    fetch(`/cms/api/admin/analytics?from=${fetchFrom}&to=${fetchTo}`)
+    fetch(`${domainName}/api/admin/analytics?from=${fetchFrom}&to=${fetchTo}`)
       .then(res => res.json())
       .then(result => {
         if (cancelled) return;
@@ -443,7 +444,7 @@ export default function AnalyticsTab({ posts, categories = [], bannerSettings = 
   useEffect(() => {
     if (!win || range !== 'all' || monthlyCms) return;
     let cancelled = false;
-    fetch('/cms/api/admin/analytics?group=month')
+    fetch(`${domainName}/api/admin/analytics?group=month`)
       .then(res => res.json())
       .then(result => { if (!cancelled && result.success) setMonthlyCms(result.data || []); })
       .catch(err => console.error('Failed to fetch monthly analytics', err));
@@ -461,7 +462,7 @@ export default function AnalyticsTab({ posts, categories = [], bannerSettings = 
     const qs = (range === 'all' ? 'mode=lifetime' : `from=${winFrom}&to=${fetchTo}&prevFrom=${fetchFrom}&prevTo=${prevTo}`)
       + `&lang=${encodeURIComponent(langFilter)}`
       + (category !== 'all' ? `&category=${encodeURIComponent(category)}` : '');
-    fetch(`/cms/api/admin/analytics/ga4?${qs}`)
+    fetch(`${domainName}/api/admin/analytics/ga4?${qs}`)
       .then(res => res.json())
       .then(result => {
         if (cancelled) return;
