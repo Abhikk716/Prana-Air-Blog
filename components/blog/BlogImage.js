@@ -21,15 +21,21 @@ export default function BlogImage({ post, className, style }) {
     }
 
     let cleanImg = img.startsWith('/') ? img : '/' + img;
-    
-    // Both new uploads and migrated wp-content are hosted in this project's public folder.
-    // So they both need the /cms base path if it's missing.
-    if (!cleanImg.startsWith('/cms/')) { 
-      cleanImg = '/cms' + cleanImg; 
-    }
-    cleanImg = cleanImg.replace(/^\/cms\/(test-blog|blog|pranaair-cms)\//, '/cms/');
+    if (!cleanImg.startsWith('/cms/') && !cleanImg.startsWith('/wp-content/')) { cleanImg = '/cms' + cleanImg; }
+    cleanImg = cleanImg.replace(/^\/(test-blog|blog|pranaair-cms)\//, '/');
 
     const domain = process.env.NEXT_PUBLIC_DOMAIN;
+
+    if (cleanImg.includes('/wp-content/uploads/')) {
+      if (domain) {
+        return `${domain.replace(/\/cms\/?$/, '')}/blog${cleanImg}`;
+      }
+      if (process.env.NODE_ENV !== 'development') {
+        return `https://www.pranaair.com/blog${cleanImg}`;
+      } else {
+        return `http://localhost:3000${cleanImg}`;
+      }
+    }
 
     if (domain && !cleanImg.startsWith('http')) {
       const base = domain.replace(/\/+$/, '');
@@ -50,13 +56,13 @@ export default function BlogImage({ post, className, style }) {
 
   if (src === FALLBACK) {
     return (
-      <div 
-        className={className} 
-        style={{ 
-          ...style, 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
+      <div
+        className={className}
+        style={{
+          ...style,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
           backgroundColor: '#ffffff',
           overflow: 'hidden'
         }}
