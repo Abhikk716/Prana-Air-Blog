@@ -48,10 +48,18 @@ export default function TrendingWidget({ lang = 'en', title = 'Trending Articles
       const match = path.match(/wp-content\/uploads\/.*/);
       if (match) path = '/' + match[0];
     }
-    const cleanImg = path.startsWith('/') ? path : `/${path}`;
+    let cleanImg = path.startsWith('/') ? path : `/${path}`;
+    
+    // Ensure all local images are served with the /cms basePath
+    if (!cleanImg.startsWith('/cms/')) {
+      cleanImg = `/cms${cleanImg}`;
+    }
+    cleanImg = cleanImg.replace(/^\/cms\/(test-blog|blog|pranaair-cms)\//, '/cms/');
+
     if (process.env.NEXT_PUBLIC_DOMAIN) {
       const base = process.env.NEXT_PUBLIC_DOMAIN.replace(/\/+$/, '');
-      return `${base}${cleanImg}`;
+      const basePath = cleanImg.startsWith('/') ? cleanImg : `/${cleanImg}`;
+      return `${base}${basePath}`;
     }
     return cleanImg;
   };
@@ -75,25 +83,33 @@ export default function TrendingWidget({ lang = 'en', title = 'Trending Articles
               <Link href={getPostUrl(post.slug)} className="sidebar-post-title">
                 {post.title}
               </Link>
-              <div className="sidebar-post-meta">
+              <div className="sidebar-post-meta" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#6B7280', marginTop: '4px' }}>
                 {post.date && (
-                  <span>
-                    {new Date(post.date).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric'
-                    })}
-                  </span>
+                  <>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="16" y1="2" x2="16" y2="6"></line>
+                      <line x1="8" y1="2" x2="8" y2="6"></line>
+                      <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                    <span>
+                      {new Date(post.date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </span>
+                  </>
                 )}
-                {post.views ? (
-                  <span className="sidebar-post-views">
-                    · {post.views} views
-                  </span>
-                ) : null}
               </div>
             </div>
           </div>
         ))}
+      </div>
+      <div style={{ marginTop: '1.25rem' }}>
+        <Link href={`/${cmsSlug}/dashboard`} style={{ color: '#69b454', fontSize: '0.85rem', fontWeight: '600', textDecoration: 'none' }}>
+          All Articles &rarr;
+        </Link>
       </div>
     </div>
   );

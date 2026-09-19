@@ -109,18 +109,25 @@ export function PostThumb({ src, alt }) {
       </div>
     );
   }
-  const isWp = src.startsWith('/wp-content/');
-  let resolved = state === 'fallback' && isWp ? `https://www.pranaair.com/blog${src}` : src;
-  if (process.env.NEXT_PUBLIC_DOMAIN && resolved && resolved.startsWith('/') && !resolved.startsWith('//')) {
-    resolved = `${process.env.NEXT_PUBLIC_DOMAIN.replace(/\/+$/, '')}${resolved}`;
+  // Normalize missing leading slash for relative paths
+  let cleanSrc = (src && !src.startsWith('http') && !src.startsWith('/')) ? '/' + src : (src || '');
+  
+  let resolved = cleanSrc;
+
+  if (process.env.NEXT_PUBLIC_DOMAIN && cleanSrc.startsWith('/') && !cleanSrc.startsWith('//')) {
+    resolved = `${process.env.NEXT_PUBLIC_DOMAIN.replace(/\/+$/, '')}${cleanSrc}`;
+  } else if (!cleanSrc.startsWith('http')) {
+    // Both wp-content and uploads are served locally via the /cms basePath
+    resolved = `/cms${cleanSrc}`;
   }
+
   return (
     <div className="post-thumb">
       <img
         src={resolved}
         alt={alt || ''}
         loading="lazy"
-        onError={() => setState(prev => (prev === 'ok' && isWp ? 'fallback' : 'broken'))}
+        onError={() => setState(prev => (prev === 'ok' ? 'broken' : 'broken'))}
       />
     </div>
   );

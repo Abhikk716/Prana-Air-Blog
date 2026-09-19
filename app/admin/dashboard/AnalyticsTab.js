@@ -423,7 +423,7 @@ export default function AnalyticsTab({ posts, categories = [], bannerSettings = 
     let cancelled = false;
     setLoading(true);
     setError('');
-    fetch(`/api/admin/analytics?from=${fetchFrom}&to=${fetchTo}`)
+    fetch(`/cms/api/admin/analytics?from=${fetchFrom}&to=${fetchTo}`)
       .then(res => res.json())
       .then(result => {
         if (cancelled) return;
@@ -443,7 +443,7 @@ export default function AnalyticsTab({ posts, categories = [], bannerSettings = 
   useEffect(() => {
     if (!win || range !== 'all' || monthlyCms) return;
     let cancelled = false;
-    fetch('/api/admin/analytics?group=month')
+    fetch('/cms/api/admin/analytics?group=month')
       .then(res => res.json())
       .then(result => { if (!cancelled && result.success) setMonthlyCms(result.data || []); })
       .catch(err => console.error('Failed to fetch monthly analytics', err));
@@ -461,7 +461,7 @@ export default function AnalyticsTab({ posts, categories = [], bannerSettings = 
     const qs = (range === 'all' ? 'mode=lifetime' : `from=${winFrom}&to=${fetchTo}&prevFrom=${fetchFrom}&prevTo=${prevTo}`)
       + `&lang=${encodeURIComponent(langFilter)}`
       + (category !== 'all' ? `&category=${encodeURIComponent(category)}` : '');
-    fetch(`/api/admin/analytics/ga4?${qs}`)
+    fetch(`/cms/api/admin/analytics/ga4?${qs}`)
       .then(res => res.json())
       .then(result => {
         if (cancelled) return;
@@ -1212,7 +1212,7 @@ export default function AnalyticsTab({ posts, categories = [], bannerSettings = 
       <Card
         title="Banners"
         subtitle={`${d.banners.length} configured · ${d.liveBanners} live · GA views of the posts each banner runs on, CMS-tracked clicks${d.langScoped ? ' (all languages)' : ''}${category !== 'all' ? ` · posts in ${category}` : ''}`}
-        action={<a className="an-link" href="/admin/dashboard?tab=banners">Manage banners</a>}
+        action={<a className="an-link" href="/cms/admin/dashboard?tab=banners">Manage banners</a>}
       >
         {d.banners.length ? (
           <div className="an-table-wrap">

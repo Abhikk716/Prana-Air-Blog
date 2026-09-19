@@ -30,7 +30,7 @@ const allLanguages = [
 // with exponential backoff before giving up on it. `signal` lets the caller
 // cancel an in-flight or not-yet-started request (Cancel button).
 async function fetchTranslation({ title, excerpt, content, lang, signal }, attempt = 0) {
-  const res = await fetch('/api/translate', {
+  const res = await fetch('/cms/api/translate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title, excerpt, content, targetLanguage: lang }),
@@ -540,13 +540,13 @@ function BlogEditorContent() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const res = await fetch('/api/admin/check-auth');
+        const res = await fetch('/cms/api/admin/check-auth');
         if (!res.ok) {
           router.push('/admin/login');
         } else {
           setAuthChecked(true);
           // Fetch existing categories for the dropdown
-          fetch('/api/posts/meta')
+          fetch('/cms/api/posts/meta')
             .then(r => r.json())
             .then(data => {
               if (data.success && data.data && data.data.categories) {
@@ -556,7 +556,7 @@ function BlogEditorContent() {
             .catch(console.error);
 
           // Fetch existing posts for keyword cannibalization checks
-          fetch('/api/posts?limit=100')
+          fetch('/cms/api/posts?limit=100')
             .then(r => r.json())
             .then(data => {
               if (data.success && Array.isArray(data.data)) {
@@ -579,7 +579,7 @@ function BlogEditorContent() {
 
     const fetchPost = async () => {
       try {
-        const res = await fetch(`/api/posts/${postId}`);
+        const res = await fetch(`/cms/api/posts/${postId}`);
         const data = await res.json();
 
         if (res.ok && data.success) {
@@ -730,7 +730,7 @@ function BlogEditorContent() {
   // send its in-progress draft instead of React state, which is still stale
   // mid-pipeline because setState hasn't flushed between steps.
   const requestAiFix = async (actionType, overrides = {}) => {
-    const res = await fetch('/api/ai/fix-seo', {
+    const res = await fetch('/cms/api/ai/fix-seo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1051,7 +1051,7 @@ function BlogEditorContent() {
     const nextAlt = featuredImageAlt.trim();
     setAltSaveState('saving');
     try {
-      const res = await fetch(`/api/posts/${postId}`, {
+      const res = await fetch(`/cms/api/posts/${postId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ featuredImage, featuredImageAlt: nextAlt })
@@ -1095,7 +1095,7 @@ function BlogEditorContent() {
         showNotification('Uploading featured image...', 'success');
 
         try {
-          const res = await fetch('/api/admin/upload', {
+          const res = await fetch('/cms/api/admin/upload', {
             method: 'POST',
             body: formData,
           });
@@ -1130,7 +1130,7 @@ function BlogEditorContent() {
         showNotification('Uploading promo image...', 'success');
 
         try {
-          const res = await fetch('/api/admin/upload', {
+          const res = await fetch('/cms/api/admin/upload', {
             method: 'POST',
             body: formData,
           });
@@ -1165,7 +1165,7 @@ function BlogEditorContent() {
         showNotification('Uploading story image...', 'success');
 
         try {
-          const res = await fetch('/api/admin/upload', {
+          const res = await fetch('/cms/api/admin/upload', {
             method: 'POST',
             body: formData,
           });
@@ -1304,7 +1304,7 @@ function BlogEditorContent() {
     };
 
     try {
-      const url = postId ? `/api/posts/${postId}` : '/api/posts';
+      const url = postId ? `/cms/api/posts/${postId}` : '/cms/api/posts';
       const method = postId ? 'PUT' : 'POST';
 
       const res = await fetch(url, {
@@ -1362,7 +1362,7 @@ function BlogEditorContent() {
 
       // If it's a new post, update URL so we get the ID for further saves and Preview button
       if (!postId && id) {
-        router.push(`/admin/editor?id=${id}`);
+        router.push(`/cms/admin/editor?id=${id}`);
       }
     }
   };
@@ -1494,7 +1494,7 @@ function BlogEditorContent() {
       {/* Editor Header Navigation */}
       <div className="editor-header">
         <div className="header-title">
-          <a href="/admin/dashboard?tab=posts" className="header-back-link">
+          <a href="/cms/admin/dashboard?tab=posts" className="header-back-link">
             &larr; Back to Dashboard
           </a>
           <h1>{postId ? 'Edit Blog Post' : 'Write a New Post'}</h1>
@@ -1503,7 +1503,7 @@ function BlogEditorContent() {
         <div className="action-buttons">
           {postId && (
             <a
-              href={selectedLang === 'en' ? `/${process.env.NEXT_PUBLIC_CMS_SLUG || 'pranaair-cms'}/preview?id=${postId}` : `/${process.env.NEXT_PUBLIC_CMS_SLUG || 'pranaair-cms'}/preview?id=${postId}&lang=${selectedLang}`}
+              href={selectedLang === 'en' ? `/cms/${process.env.NEXT_PUBLIC_CMS_SLUG || 'pranaair-cms'}/preview?id=${postId}` : `/cms/${process.env.NEXT_PUBLIC_CMS_SLUG || 'pranaair-cms'}/preview?id=${postId}&lang=${selectedLang}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn btn-secondary"
@@ -1686,6 +1686,18 @@ function BlogEditorContent() {
                     relative_urls: false,
                     remove_script_host: false,
                     convert_urls: false,
+                    urlconverter_callback: function(url, node, on_save, name) {
+                      if (on_save) return url;
+                      if (!url.startsWith('http') && !url.startsWith('//')) {
+                        let cleanSrc = url.startsWith('/') ? url : '/' + url;
+                        // Both wp-content and local uploads are served from /cms
+                        if (cleanSrc.startsWith('/wp-content/') || cleanSrc.startsWith('/uploads/')) {
+                          return '/cms' + cleanSrc;
+                        }
+                      }
+                      return url;
+                    },
+
                     // Menubar + toolbar dock under the pinned title block while
                     // the (page-scrolling) editor is in view.
                     toolbar_sticky: true,
@@ -1896,7 +1908,7 @@ function BlogEditorContent() {
                         const formData = new FormData();
                         formData.append('file', blobInfo.blob(), blobInfo.filename());
                         try {
-                          const res = await fetch('/api/admin/upload', {
+                          const res = await fetch('/cms/api/admin/upload', {
                             method: 'POST',
                             body: formData,
                           });
@@ -2740,7 +2752,13 @@ function BlogEditorContent() {
                 {featuredImage && (
                   <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #1e293b' }}>
                     <img
-                      src={featuredImage.startsWith('/') && !featuredImage.startsWith('//') && process.env.NEXT_PUBLIC_DOMAIN ? `${process.env.NEXT_PUBLIC_DOMAIN.replace(/\/+$/, '')}${featuredImage}` : featuredImage}
+                      src={
+                        (featuredImage.startsWith('/') && !featuredImage.startsWith('//') && process.env.NEXT_PUBLIC_DOMAIN)
+                          ? `${process.env.NEXT_PUBLIC_DOMAIN.replace(/\/+$/, '')}${featuredImage}`
+                          : (!featuredImage.startsWith('http')
+                              ? `/cms/${featuredImage.replace(/^\//, '')}`
+                              : featuredImage)
+                      }
                       alt="Featured Preview"
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />

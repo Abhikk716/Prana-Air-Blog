@@ -3,50 +3,33 @@ import React, { useState, useEffect } from 'react';
 
 const FALLBACK = 'https://pranaair.com/img/prana-air-logo.webp';
 
-/**
- * BlogImage – renders a blog featured image.
- *
- * The `featuredImage` field from the Blog CMS API is always either:
- *   - an absolute URL (https://...)         → served from our own /uploads/ CDN or blog CMS static dir
- *   - a relative /uploads/featured/… path  → prepend BLOG_API_URL (set via window.location in client)
- *
- * WordPress dependency has been completely removed.
- */
 export default function BlogImage({ post, className, style }) {
   const getInitialSrc = () => {
     if (!post?.featuredImage) return FALLBACK;
 
     let img = post.featuredImage;
 
-    // If it's a wp-content upload, strictly extract just that part
     if (img.includes('wp-content/uploads/')) {
       const match = img.match(/wp-content\/uploads\/.*/);
       if (match) img = '/' + match[0];
     } else {
-      // Remove the Vercel and dev domains completely so it becomes a relative path for SEO
-      img = img.replace(/(https?:\/\/)?(www\.)?prana-air-blog\.vercel\.app\/?(?:test-blog\/|blog\/)?/gi, '/');
       img = img.replace(/(https?:\/\/)?(www\.)?dev\.pranaair\.com\/?(?:test-blog\/|blog\/)?/gi, '/');
     }
 
-    // If it's an external URL (e.g. Unsplash), return it as is
     if (img.startsWith('http')) {
       return img;
     }
 
-    // Clean up the relative path
     let cleanImg = img.startsWith('/') ? img : '/' + img;
-    cleanImg = cleanImg.replace(/^\/(test-blog|blog|pranaair-cms)\//, '/');
+    
+    // Both new uploads and migrated wp-content are hosted in this project's public folder.
+    // So they both need the /cms base path if it's missing.
+    if (!cleanImg.startsWith('/cms/')) { 
+      cleanImg = '/cms' + cleanImg; 
+    }
+    cleanImg = cleanImg.replace(/^\/cms\/(test-blog|blog|pranaair-cms)\//, '/cms/');
 
     const domain = process.env.NEXT_PUBLIC_DOMAIN;
-
-    if (cleanImg.includes('/wp-content/uploads/')) {
-      if (domain) {
-        return `${domain.replace(/\/cms\/?$/, '')}/blog${cleanImg}`;
-      }
-      if (process.env.NODE_ENV !== 'development') {
-        return `https://www.pranaair.com/blog${cleanImg}`;
-      }
-    }
 
     if (domain && !cleanImg.startsWith('http')) {
       const base = domain.replace(/\/+$/, '');
@@ -54,11 +37,7 @@ export default function BlogImage({ post, className, style }) {
       return `${base}${path}`;
     }
 
-    const bypassSecret = process.env.NEXT_PUBLIC_VERCEL_BYPASS_SECRET || 'kvgxx9053m0tNdDFjYcNE1UCj4dpSGHd';
-    const separator = cleanImg.includes('?') ? '&' : '?';
-    const bypassQuery = bypassSecret ? `${separator}x-vercel-protection-bypass=${bypassSecret}` : '';
-
-    return `${cleanImg}${bypassQuery}`;
+    return cleanImg;
   };
 
   const [src, setSrc] = useState(getInitialSrc);

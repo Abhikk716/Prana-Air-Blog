@@ -88,7 +88,7 @@ export default async function WordPressStylePreviewPage(props) {
           <p style={{ color: '#71717a', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '2rem' }}>
             Could not find the requested post preview. Please verify the post ID or return to the dashboard.
           </p>
-          <Link href="/admin/dashboard" className="btn-back-blogs">
+          <Link href="/cms/admin/dashboard" className="btn-back-blogs">
             &larr; Back to Dashboard
           </Link>
         </div>
@@ -218,7 +218,7 @@ export default async function WordPressStylePreviewPage(props) {
 
         {/* Back Link */}
         <div className="editorial-back-link">
-          <Link href="/admin/dashboard" className="btn-back-blogs">
+          <Link href="/cms/admin/dashboard" className="btn-back-blogs">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="19" y1="12" x2="5" y2="12"></line>
               <polyline points="12 19 5 12 12 5"></polyline>
@@ -303,10 +303,13 @@ export default async function WordPressStylePreviewPage(props) {
                 html={post.content
                   .replace(/(https?:\/\/)?(www\.)?prana-air-blog\.vercel\.app\/?(?:test-blog\/|blog\/)?/gi, '/')
                   .replace(/(https?:\/\/)?(www\.)?dev\.pranaair\.com\/?(?:test-blog\/|blog\/)?/gi, '/')
-                  .replace(/(?:\.\.\/)+uploads\//gi, '/uploads/')
+                  .replace(/(?:\.\.\/)+uploads\//gi, '/cms/uploads/')
+                  .replace(/([^"'\s=]*?)\/?(?<!wp-content\/)uploads\/([^"'\s>]+)/gi, '/cms/uploads/$2')
                   .replace(
                     /([^"'\s=]*?)\/?wp-content\/uploads\/([^"'\s>]+)/gi,
-                    '/wp-content/uploads/$2'
+                    process.env.NEXT_PUBLIC_DOMAIN 
+                      ? `${process.env.NEXT_PUBLIC_DOMAIN.replace(/\/cms\/?$/, '')}/blog/wp-content/uploads/$2`
+                      : '/cms/wp-content/uploads/$2'
                   )
                   .replace(/\s+srcset="[^"]*"/gi, '')
                   .replace(/\s+sizes="[^"]*"/gi, '')}
@@ -383,7 +386,7 @@ export default async function WordPressStylePreviewPage(props) {
           <div className="editorial-related-section">
             <div className="related-header">
               <h3 className="related-title">Recent Articles</h3>
-              <Link href="/admin/dashboard" className="related-view-all">
+              <Link href="/cms/admin/dashboard" className="related-view-all">
                 All articles &rarr;
               </Link>
             </div>

@@ -34,7 +34,7 @@ export async function GET(request, { params }) {
     // Candidate directories where uploads may be stored
     const candidateDirs = [
       process.env.UPLOAD_DIR,
-      '/var/www/cms.pranaair.com/html/uploads', // Production
+      '/var/www/cms.pranaair.com/html/upload', // Production
       '/var/www/dev.pranaair.com/html/cms.pranaair.com/uploads', // Dev Server
       join(process.cwd(), 'public', 'uploads'), // Local fallback
     ].filter(Boolean);
@@ -73,6 +73,7 @@ export async function GET(request, { params }) {
       }
     }
 
+    if (process.env.NODE_ENV === 'development') { return NextResponse.redirect("https://dev.pranaair.com/cms/uploads/$relativePath"); }
     return new NextResponse('Image not found', { status: 404 });
   } catch (error) {
     console.error('Error serving upload image:', error);

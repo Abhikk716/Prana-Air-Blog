@@ -69,7 +69,7 @@ export async function GET(req) {
       id: p._id.toString(),
       title: getTranslatedTitle(p),
       imageUrl: formatImageUrl(p.story?.imageUrl || p.featuredImage || ''),
-      link: p.story?.link || (lang === 'en' ? `/test-blog/${p.slug}` : `/${lang}/test-blog/${p.slug}`),
+      link: p.story?.link || (lang === 'en' ? `/test-blog/${p.slug}` : `/test-blog/${lang}/${p.slug}`),
       endDate: p.story?.endDate || null,
       type: 'post',
       slug: p.slug,
@@ -134,3 +134,4 @@ export async function GET(req) {
     }, { status: 500, headers: CORS_HEADERS });
   }
 }
+

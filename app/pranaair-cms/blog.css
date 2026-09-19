@@ -1507,11 +1507,11 @@
   font-size: 0.75rem !important;
   font-weight: 800 !important;
   text-transform: uppercase !important;
-  letter-spacing: 0.1em !important;
-  color: #71717a !important;
+  letter-spacing: 0.05em !important;
+  color: #4b5563 !important;
   margin: 0 0 1.25rem 0 !important;
-  padding-bottom: 0.6rem !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06) !important;
+  padding-bottom: 0 !important;
+  border-bottom: none !important;
 }
 
 .popular-posts-list {
@@ -1527,10 +1527,10 @@
 }
 
 .sidebar-post-thumb-wrap {
-  width: 68px !important;
-  height: 68px !important;
-  min-width: 68px !important;
-  border-radius: 10px !important;
+  width: 60px !important;
+  height: 60px !important;
+  min-width: 60px !important;
+  border-radius: 6px !important;
   overflow: hidden !important;
   background: #e4e4e7 !important;
   display: block !important;
@@ -1540,7 +1540,6 @@
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
-  display: block !important;
 }
 
 .sidebar-post-item-content {
@@ -1549,10 +1548,10 @@
 }
 
 .sidebar-post-title {
-  font-size: 0.88rem !important;
-  font-weight: 600 !important;
-  line-height: 1.35 !important;
-  color: #18181b !important;
+  font-size: 0.82rem !important;
+  font-weight: 700 !important;
+  line-height: 1.4 !important;
+  color: #111827 !important;
   text-decoration: none !important;
   display: -webkit-box !important;
   -webkit-line-clamp: 2 !important;

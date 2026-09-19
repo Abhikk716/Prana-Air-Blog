@@ -144,7 +144,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   const fetchBanners = async () => {
     setLoadingBanners(true);
     try {
-      const res = await fetch('/api/admin/banners');
+      const res = await fetch('/cms/api/admin/banners');
       const data = await res.json();
       if (data.success) {
         setBannerSettings(data.banners);
@@ -167,7 +167,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
         const formData = new FormData();
         formData.append('file', file);
         try {
-          const res = await fetch('/api/admin/upload', { method: 'POST', body: formData });
+          const res = await fetch('/cms/api/admin/upload', { method: 'POST', body: formData });
           const data = await res.json();
           if (res.ok) {
             setEditingBanner(prev => ({
@@ -190,7 +190,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
 
   const handleSaveBanner = async () => {
     try {
-      const res = await fetch('/api/admin/banners', {
+      const res = await fetch('/cms/api/admin/banners', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editingBanner)
@@ -252,7 +252,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
     if (!confirm('Are you sure you want to delete this banner campaign?')) return;
 
     try {
-      const res = await fetch('/api/admin/banners?id=' + editingBanner._id, { method: 'DELETE' });
+      const res = await fetch('/cms/api/admin/banners?id=' + editingBanner._id, { method: 'DELETE' });
       if (res.ok) {
         fetchBanners();
         setActiveBannerTab('global');
@@ -295,7 +295,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
     setLoadingId(postId);
 
     try {
-      const res = await fetch(`/api/posts/${postId}`, {
+      const res = await fetch(`/cms/api/posts/${postId}`, {
         method: 'DELETE',
       });
 
@@ -319,7 +319,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   const handleLogout = async () => {
     setLogoutLoading(true);
     try {
-      const res = await fetch('/api/admin/logout', {
+      const res = await fetch('/cms/api/admin/logout', {
         method: 'POST',
       });
 
@@ -342,7 +342,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   const displayLang = languageFilter.startsWith('has:') ? languageFilter.slice(4) : null;
   const displayLangShort = displayLang ? (ALL_LANGUAGES.find(l => l.code === displayLang)?.short || displayLang.toUpperCase()) : '';
   const shownTitle = (post) => decodeEntities((displayLang && post.translationTitles?.[displayLang]) || post.title);
-  const editorHref = (post) => `/admin/editor?id=${post._id}${displayLang ? `&lang=${encodeURIComponent(displayLang)}` : ''}`;
+  const editorHref = (post) => `/cms/admin/editor?id=${post._id}${displayLang ? `&lang=${encodeURIComponent(displayLang)}` : ''}`;
 
   // Filter posts based on search, status, and category
   let filteredPosts = posts.filter((post) => {
@@ -456,7 +456,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
 
     setBulkLoading(action);
     try {
-      const res = await fetch('/api/admin/posts/bulk', {
+      const res = await fetch('/cms/api/admin/posts/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ids })
@@ -561,7 +561,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
         {activeTab === 'posts' && (
           <div style={{ display: 'flex', gap: '1rem' }}>
             <a
-              href="/admin/editor"
+              href="/cms/admin/editor"
               style={{
                 padding: '0.6rem 1.25rem',
                 background: 'linear-gradient(135deg, #74b75c, #5e9e48)',
@@ -786,7 +786,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                         <td className="col-actions">
                           <div className="row-actions">
                             <a href={editorHref(post)} className="row-action edit">Edit</a>
-                            <a href={`/${process.env.NEXT_PUBLIC_CMS_SLUG || 'pranaair-cms'}/preview?id=${post._id}`} target="_blank" rel="noopener noreferrer" className="row-action view" title="Open preview in a new tab" aria-label="Open preview in a new tab">
+                            <a href={`/cms/${process.env.NEXT_PUBLIC_CMS_SLUG || 'pranaair-cms'}/preview?id=${post._id}`} target="_blank" rel="noopener noreferrer" className="row-action view" title="Open preview in a new tab" aria-label="Open preview in a new tab">
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
                               </svg>
@@ -1082,7 +1082,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                             {post.story?.endDate ? formatDate(post.story.endDate) : 'Never'}
                           </td>
                           <td style={{ padding: '1rem', textAlign: 'right' }}>
-                            <a href={`/admin/editor?id=${post._id}`} className="row-action edit" style={{ display: 'inline-block' }}>Edit Post</a>
+                            <a href={`/cms/admin/editor?id=${post._id}`} className="row-action edit" style={{ display: 'inline-block' }}>Edit Post</a>
                           </td>
                         </tr>
                       ))

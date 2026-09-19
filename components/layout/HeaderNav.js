@@ -13,7 +13,7 @@ export default function HeaderNav() {
 
   const checkAuth = async () => {
     try {
-      const res = await fetch('/api/admin/check-auth');
+      const res = await fetch('/cms/api/admin/check-auth');
       if (res.ok) {
         setIsAuthenticated(true);
       } else {
@@ -32,7 +32,7 @@ export default function HeaderNav() {
 
   const handleLogout = async () => {
     try {
-      const res = await fetch('/api/admin/logout', {
+      const res = await fetch('/cms/api/admin/logout', {
         method: 'POST',
       });
       if (res.ok) {
@@ -70,27 +70,27 @@ export default function HeaderNav() {
           <>
             <a
               onClick={() => setIsMenuOpen(false)}
-              href="/admin/dashboard?tab=analytics"
+              href="/cms/admin/dashboard?tab=analytics"
               style={linkStyle(pathname === '/admin/dashboard' && activeTab === 'analytics')}
             >
               Analytics
             </a>
             <a
-              href="/admin/dashboard?tab=posts"
+              href="/cms/admin/dashboard?tab=posts"
               onClick={() => setIsMenuOpen(false)}
               style={linkStyle(pathname === '/admin/dashboard' && activeTab === 'posts')}
             >
               All Posts
             </a>
             <a
-              href="/admin/dashboard?tab=banners"
+              href="/cms/admin/dashboard?tab=banners"
               onClick={() => setIsMenuOpen(false)}
               style={linkStyle(pathname === '/admin/dashboard' && activeTab === 'banners')}
             >
               Banners
             </a>
             <a
-              href="/admin/dashboard?tab=stories"
+              href="/cms/admin/dashboard?tab=stories"
               onClick={() => setIsMenuOpen(false)}
               style={linkStyle(pathname === '/admin/dashboard' && activeTab === 'stories')}
             >
