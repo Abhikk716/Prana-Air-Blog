@@ -1,7 +1,6 @@
 import { put } from '@vercel/blob';
-import { writeFile } from 'fs/promises';
+import { writeFile, access, mkdir } from 'fs/promises';
 import { join } from 'path';
-import fs from 'fs';
 import { isAdminAuthenticated } from '../../../../lib/adminAuth';
 
 export async function POST(request) {
@@ -44,44 +43,44 @@ export async function POST(request) {
       return Response.json({ success: true, url: blob.url });
     }
 
-    // 5. Server Disk Upload (/html/uploads or configurable UPLOAD_DIR with local fallback)
+    // 5. Server Disk Upload with Environment Condition
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
+
+    // Helper to check if a directory exists asynchronously
+    const dirExists = async (dir) => {
+      try {
+        await access(dir);
+        return true;
+      } catch {
+        return false;
+      }
+    };
 
     let baseDir;
     if (process.env.UPLOAD_DIR) {
       baseDir = process.env.UPLOAD_DIR;
-    } else if (fs.existsSync('/html/uploads')) {
-      baseDir = '/html/uploads';
+    } else if (await dirExists('/var/www/cms.pranaair.com/html/uploads')) {
+      // Production server
+      baseDir = '/var/www/cms.pranaair.com/html/uploads';
+    } else if (await dirExists('/var/www/dev.pranaair.com/html/cms.pranaair.com/uploads')) {
+      // Dev server
+      baseDir = '/var/www/dev.pranaair.com/html/cms.pranaair.com/uploads';
     } else {
+      // Local fallback only if the server paths do not exist
       baseDir = join(process.cwd(), 'public', 'uploads');
     }
 
-    // Target folder structure: <baseDir>/<YYYY>/<MM> (e.g. /html/uploads/2026/09)
+    // Target folder structure: <baseDir>/<YYYY>/<MM> (e.g. /var/www/.../2026/09)
     const targetDir = join(/*turbopackIgnore: true*/ baseDir, year, month);
 
     // Auto-create year and month folders if they don't exist
-    if (!fs.existsSync(/*turbopackIgnore: true*/ targetDir)) {
-      fs.mkdirSync(/*turbopackIgnore: true*/ targetDir, { recursive: true });
+    if (!(await dirExists(targetDir))) {
+      await mkdir(/*turbopackIgnore: true*/ targetDir, { recursive: true });
     }
 
     const filePath = join(/*turbopackIgnore: true*/ targetDir, fileName);
     await writeFile(filePath, buffer);
-
-    // Also write to local public/uploads during local development if baseDir is different
-    // so Next.js static dev server can immediately serve the image
-    const localTargetDir = join(process.cwd(), 'public', 'uploads', year, month);
-    if (targetDir !== localTargetDir) {
-      try {
-        if (!fs.existsSync(localTargetDir)) {
-          fs.mkdirSync(localTargetDir, { recursive: true });
-        }
-        await writeFile(join(localTargetDir, fileName), buffer);
-      } catch (localErr) {
-        // Non-fatal if running in production where public dir might be read-only
-        console.warn('Could not mirror to public/uploads directory:', localErr.message);
-      }
-    }
 
     // URL path structure: /uploads/YYYY/MM/filename.ext
     const url = `/uploads/${year}/${month}/${fileName}`;

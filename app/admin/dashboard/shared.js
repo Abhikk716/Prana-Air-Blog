@@ -90,15 +90,30 @@ export function PostThumb({ src, alt }) {
 
   if (!src || state === 'broken') {
     return (
-      <div className="post-thumb" aria-hidden="true">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
-        </svg>
+      <div 
+        className="post-thumb" 
+        aria-hidden="true" 
+        style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          backgroundColor: '#f5f5f5', 
+          overflow: 'hidden' 
+        }}
+      >
+        <img
+          src="https://pranaair.com/img/prana-air-logo.webp"
+          alt="Prana Air"
+          style={{ maxWidth: '70%', maxHeight: '70%', objectFit: 'contain', opacity: 0.9 }}
+        />
       </div>
     );
   }
   const isWp = src.startsWith('/wp-content/');
-  const resolved = state === 'fallback' && isWp ? `https://www.pranaair.com/blog${src}` : src;
+  let resolved = state === 'fallback' && isWp ? `https://www.pranaair.com/blog${src}` : src;
+  if (process.env.NEXT_PUBLIC_DOMAIN && resolved && resolved.startsWith('/') && !resolved.startsWith('//')) {
+    resolved = `${process.env.NEXT_PUBLIC_DOMAIN.replace(/\/+$/, '')}${resolved}`;
+  }
   return (
     <div className="post-thumb">
       <img

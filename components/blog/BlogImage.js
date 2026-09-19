@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 
-const FALLBACK = 'https://images.unsplash.com/photo-1584622650111-993a426fbf0a?auto=format&fit=crop&w=800&q=80';
+const FALLBACK = 'https://pranaair.com/img/prana-air-logo.webp';
 
 /**
  * BlogImage – renders a blog featured image.
@@ -37,8 +37,21 @@ export default function BlogImage({ post, className, style }) {
     let cleanImg = img.startsWith('/') ? img : '/' + img;
     cleanImg = cleanImg.replace(/^\/(test-blog|blog|pranaair-cms)\//, '/');
 
-    if (process.env.NODE_ENV !== 'development' && cleanImg.includes('/wp-content/uploads/')) {
-      return `https://www.pranaair.com/blog${cleanImg}`;
+    const domain = process.env.NEXT_PUBLIC_DOMAIN;
+
+    if (cleanImg.includes('/wp-content/uploads/')) {
+      if (domain) {
+        return `${domain.replace(/\/cms\/?$/, '')}/blog${cleanImg}`;
+      }
+      if (process.env.NODE_ENV !== 'development') {
+        return `https://www.pranaair.com/blog${cleanImg}`;
+      }
+    }
+
+    if (domain && !cleanImg.startsWith('http')) {
+      const base = domain.replace(/\/+$/, '');
+      const path = cleanImg.startsWith('/') ? cleanImg : `/${cleanImg}`;
+      return `${base}${path}`;
     }
 
     const bypassSecret = process.env.NEXT_PUBLIC_VERCEL_BYPASS_SECRET || 'kvgxx9053m0tNdDFjYcNE1UCj4dpSGHd';
@@ -55,6 +68,28 @@ export default function BlogImage({ post, className, style }) {
   }, [post]);
 
   const handleError = () => setSrc(FALLBACK);
+
+  if (src === FALLBACK) {
+    return (
+      <div 
+        className={className} 
+        style={{ 
+          ...style, 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          backgroundColor: '#ffffff',
+          overflow: 'hidden'
+        }}
+      >
+        <img
+          src={src}
+          alt={post?.title || 'Prana Air'}
+          style={{ width: '80%', height: '80%', objectFit: 'contain' }}
+        />
+      </div>
+    );
+  }
 
   return (
     <img

@@ -303,6 +303,7 @@ export default async function WordPressStylePreviewPage(props) {
                 html={post.content
                   .replace(/(https?:\/\/)?(www\.)?prana-air-blog\.vercel\.app\/?(?:test-blog\/|blog\/)?/gi, '/')
                   .replace(/(https?:\/\/)?(www\.)?dev\.pranaair\.com\/?(?:test-blog\/|blog\/)?/gi, '/')
+                  .replace(/(?:\.\.\/)+uploads\//gi, '/uploads/')
                   .replace(
                     /([^"'\s=]*?)\/?wp-content\/uploads\/([^"'\s>]+)/gi,
                     '/wp-content/uploads/$2'

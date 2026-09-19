@@ -41,6 +41,7 @@ export default async function AdminDashboard() {
         featuredImage: 1,
         featuredImageAlt: 1,
         excerpt: 1,
+        story: 1,
         'seo.title': 1,
         'seo.description': 1,
         'seo.primaryKeyword': 1,

@@ -40,17 +40,21 @@ export async function GET(req) {
       .sort({ 'story.order': 1, updatedAt: -1 })
       .lean();
 
-    // Dynamically detect CMS domain (works on both localhost and production deployment)
+    // Dynamically detect CMS domain (works on both localhost, dev, and production deployment)
     const host = req.headers.get('host');
     const proto = req.headers.get('x-forwarded-proto') || (host?.includes('localhost') ? 'http' : 'https');
-    const cmsOrigin = process.env.NEXT_PUBLIC_CMS_ORIGIN || (host ? `${proto}://${host}` : '');
+    const cmsOrigin = process.env.NEXT_PUBLIC_DOMAIN || process.env.NEXT_PUBLIC_CMS_ORIGIN || (host ? `${proto}://${host}` : '');
 
     const formatImageUrl = (url) => {
       if (!url) return '';
       if (url.startsWith('http://') || url.startsWith('https://')) return url;
-      if (url.startsWith('/wp-content/')) return `https://www.pranaair.com/blog${url}`;
-      if (url.startsWith('/uploads/')) return cmsOrigin ? `${cmsOrigin}${url}` : url;
-      return url.startsWith('/') ? `https://www.pranaair.com${url}` : `https://www.pranaair.com/${url}`;
+      if (url.startsWith('/wp-content/')) {
+        const domain = process.env.NEXT_PUBLIC_DOMAIN ? process.env.NEXT_PUBLIC_DOMAIN.replace(/\/cms\/?$/, '') : 'https://www.pranaair.com';
+        return `${domain}/blog${url}`;
+      }
+      if (url.startsWith('/uploads/')) return cmsOrigin ? `${cmsOrigin.replace(/\/+$/, '')}${url}` : url;
+      const baseDomain = process.env.NEXT_PUBLIC_DOMAIN ? process.env.NEXT_PUBLIC_DOMAIN.replace(/\/cms\/?$/, '') : 'https://www.pranaair.com';
+      return url.startsWith('/') ? `${baseDomain}${url}` : `${baseDomain}/${url}`;
     };
 
     const getTranslatedTitle = (p) => {

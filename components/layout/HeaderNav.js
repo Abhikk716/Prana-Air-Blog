@@ -89,6 +89,13 @@ export default function HeaderNav() {
             >
               Banners
             </a>
+            <a
+              href="/admin/dashboard?tab=stories"
+              onClick={() => setIsMenuOpen(false)}
+              style={linkStyle(pathname === '/admin/dashboard' && activeTab === 'stories')}
+            >
+              Stories
+            </a>
             <div style={{ width: '1px', height: '24px', backgroundColor: '#e5e7eb', margin: '0 0.5rem' }}></div>
             <button
               onClick={() => {

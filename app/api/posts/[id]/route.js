@@ -91,9 +91,12 @@ export async function GET(request, { params }) {
     }
     post.promotions = promotions;
 
-    // Fix broken relative image paths from WordPress migration
-    if (post.content && post.content.includes('src="/wp-content/')) {
-      post.content = post.content.replace(/src="\/wp-content\//g, 'src="https://www.pranaair.com/wp-content/');
+    // Fix broken relative image paths from editor or WordPress migration
+    if (post.content) {
+      post.content = post.content.replace(/src=["'](?:\.\.\/)+uploads\//gi, 'src="/uploads/');
+      if (post.content.includes('src="/wp-content/')) {
+        post.content = post.content.replace(/src="\/wp-content\//g, 'src="https://www.pranaair.com/wp-content/');
+      }
     }
 
     // Make tables responsive and styled like live WP site

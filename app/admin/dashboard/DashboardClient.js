@@ -135,6 +135,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   });
 
   const [activeBannerTab, setActiveBannerTab] = useState('global');
+  const [activeStoryTab, setActiveStoryTab] = useState('post-stories');
 
   useEffect(() => {
     fetchBanners();
@@ -208,7 +209,10 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
   };
 
   const loadBannerToEdit = (id, banners = bannerSettings) => {
-    setActiveBannerTab(id);
+    const isStory = id === 'new-story' || banners.find(b => b._id === id)?.type === 'story';
+    if (isStory) setActiveStoryTab(id);
+    else setActiveBannerTab(id);
+
     if (id === 'global') {
       const existing = banners.find(b => b.type === 'global');
       if (existing) {
@@ -216,7 +220,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
       } else {
         setEditingBanner({
           type: 'global',
-          promotion: { imageUrl: '', text: '', link: '', placement: 'sidebar', endDate: '', isActive: false }
+          promotion: { imageUrl: '', imageAlt: '', text: '', link: '', placement: 'sidebar', endDate: '', isActive: false }
         });
       }
     } else if (id === 'new') {
@@ -225,7 +229,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
         name: 'New Campaign',
         categories: [],
         targetPosts: [],
-        promotion: { imageUrl: '', text: '', link: '', placement: 'sidebar', endDate: '', isActive: false }
+        promotion: { imageUrl: '', imageAlt: '', text: '', link: '', placement: 'sidebar', endDate: '', isActive: false }
       });
     } else if (id === 'new-story') {
       setEditingBanner({
@@ -233,7 +237,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
         name: 'New Story Campaign',
         categories: [],
         targetPosts: [],
-        promotion: { imageUrl: '', text: '', link: '', placement: 'story', endDate: '', isActive: false }
+        promotion: { imageUrl: '', imageAlt: '', text: '', link: '', placement: 'story', endDate: '', isActive: false }
       });
     } else {
       const existing = banners.find(b => b._id === id);
@@ -539,6 +543,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
     analytics: { title: 'Analytics', subtitle: 'Google Analytics traffic, banner clicks, content health and what to work on next.' },
     posts: { title: 'CMS Dashboard', subtitle: 'Manage your blog posts, draft articles, and track SEO metrics.' },
     banners: { title: 'Banner Campaigns', subtitle: 'Configure global and category-targeted promotion banners.' },
+    stories: { title: 'Stories Management', subtitle: 'Manage active post stories and custom story campaigns.' },
   };
 
   return (
@@ -842,6 +847,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
         <AnalyticsTab posts={posts} categories={categories} bannerSettings={bannerSettings} />
       )}
 
+      
       {activeTab === 'banners' && (
         <div style={{ padding: '1rem 0' }}>
           <div className="banner-tabs" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center' }}>
@@ -857,13 +863,6 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
             >
               + Category Campaign
             </button>
-            <button
-              onClick={() => loadBannerToEdit('new-story')}
-              className={`banner-tab banner-tab-new${activeBannerTab === 'new-story' ? ' active' : ''}`}
-              style={{ background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0' }}
-            >
-              + Story Campaign
-            </button>
             {bannerSettings.filter(b => b.type === 'category').map((banner) => (
               <button
                 key={banner._id}
@@ -871,16 +870,6 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 className={`banner-tab${activeBannerTab === banner._id ? ' active' : ''}`}
               >
                 📁 {banner.name || 'Unnamed Campaign'}
-              </button>
-            ))}
-            {bannerSettings.filter(b => b.type === 'story' || b.promotion?.placement === 'story').map((banner) => (
-              <button
-                key={banner._id}
-                onClick={() => loadBannerToEdit(banner._id)}
-                className={`banner-tab${activeBannerTab === banner._id ? ' active' : ''}`}
-                style={{ borderColor: activeBannerTab === banner._id ? '#74b75c' : '#d1fae5' }}
-              >
-                🎬 {banner.name || 'Story Campaign'}
               </button>
             ))}
           </div>
@@ -891,8 +880,6 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', margin: 0 }}>
                   {editingBanner.type === 'global'
                     ? 'Global Banner Settings'
-                    : editingBanner.type === 'story'
-                    ? (editingBanner._id ? 'Edit Story Campaign' : 'New Story Campaign')
                     : (editingBanner._id ? 'Edit Category Campaign' : 'New Category Campaign')}
                 </h3>
                 {editingBanner.type !== 'global' && (
@@ -901,10 +888,10 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                     padding: '0.2rem 0.6rem',
                     borderRadius: '999px',
                     fontWeight: 600,
-                    background: editingBanner.type === 'story' ? '#ecfdf5' : '#eff6ff',
-                    color: editingBanner.type === 'story' ? '#065f46' : '#1e40af'
+                    background: '#eff6ff',
+                    color: '#1e40af'
                   }}>
-                    {editingBanner.type === 'story' ? 'Featured Story Campaign' : 'Category Banner'}
+                    Category Banner
                   </span>
                 )}
               </div>
@@ -916,35 +903,12 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
             <div className="banner-form-grid">
               {editingBanner.type !== 'global' && (
                 <div className="banner-field">
-                  <label>Campaign Type</label>
-                  <select
-                    value={editingBanner.type || 'category'}
-                    onChange={e => {
-                      const newType = e.target.value;
-                      setEditingBanner(prev => ({
-                        ...prev,
-                        type: newType,
-                        promotion: {
-                          ...prev.promotion,
-                          placement: newType === 'story' ? 'story' : (prev.promotion?.placement === 'story' ? 'sidebar' : prev.promotion?.placement || 'sidebar')
-                        }
-                      }));
-                    }}
-                  >
-                    <option value="category">Category Banner Campaign</option>
-                    <option value="story">Featured Story Carousel Campaign</option>
-                  </select>
-                </div>
-              )}
-
-              {editingBanner.type !== 'global' && (
-                <div className="banner-field">
-                  <label>Campaign / Story Name</label>
+                  <label>Campaign / Banner Name</label>
                   <input
                     type="text"
                     value={editingBanner.name || ''}
                     onChange={e => setEditingBanner({ ...editingBanner, name: e.target.value })}
-                    placeholder={editingBanner.type === 'story' ? 'e.g. Clean Air Awareness Story' : 'e.g. Summer Sale 2026'}
+                    placeholder="e.g. Summer Sale 2026"
                   />
                 </div>
               )}
@@ -969,7 +933,7 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
               )}
 
               <div className="banner-field">
-                <label>Image URL {editingBanner.type === 'story' ? '(9:16 Story Card)' : ''}</label>
+                <label>Image URL</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
                   <input
                     type="text"
@@ -981,8 +945,6 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                   <button
                     onClick={handleBannerImageUpload}
                     style={{ padding: '0.75rem 1.25rem', background: '#f3f4f6', border: '1px solid #e5e7eb', color: '#4b5563', borderRadius: '9px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }}
-                    onMouseOver={(e) => e.target.style.backgroundColor = '#e5e7eb'}
-                    onMouseOut={(e) => e.target.style.backgroundColor = '#f3f4f6'}
                   >
                     Upload
                   </button>
@@ -990,12 +952,22 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
               </div>
 
               <div className="banner-field">
-                <label>{editingBanner.type === 'story' ? 'Story Title / Caption' : 'Promotion Text'}</label>
+                <label>Image Alt Text (SEO)</label>
+                <input
+                  type="text"
+                  value={editingBanner.promotion?.imageAlt || ''}
+                  onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, imageAlt: e.target.value } })}
+                  placeholder="Describe the banner image..."
+                />
+              </div>
+
+              <div className="banner-field">
+                <label>Promotion Text</label>
                 <input
                   type="text"
                   value={editingBanner.promotion?.text || ''}
                   onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, text: e.target.value } })}
-                  placeholder={editingBanner.type === 'story' ? 'e.g. 10 Ways To Clean Indoor Air...' : 'Get 20% off...'}
+                  placeholder="Get 20% off..."
                 />
               </div>
 
@@ -1009,19 +981,17 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 />
               </div>
 
-              {editingBanner.type !== 'story' && (
-                <div className="banner-field">
-                  <label>Placement</label>
-                  <select
-                    value={editingBanner.promotion?.placement || 'sidebar'}
-                    onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, placement: e.target.value } })}
-                  >
-                    <option value="sidebar">Sidebar</option>
-                    <option value="post_top">Inside Post (Top)</option>
-                    <option value="post_bottom">Inside Post (Bottom)</option>
-                  </select>
-                </div>
-              )}
+              <div className="banner-field">
+                <label>Placement</label>
+                <select
+                  value={editingBanner.promotion?.placement || 'sidebar'}
+                  onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, placement: e.target.value } })}
+                >
+                  <option value="sidebar">Sidebar</option>
+                  <option value="post_top">Inside Post (Top)</option>
+                  <option value="post_bottom">Inside Post (Bottom)</option>
+                </select>
+              </div>
 
               <div className="banner-field">
                 <label>Schedule End Date (Automatic Expiry)</label>
@@ -1031,20 +1001,20 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                   onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, endDate: e.target.value } })}
                 />
                 <small style={{ color: '#6b7280', fontSize: '0.8rem', marginTop: '0.25rem', display: 'block' }}>
-                  Story/Banner will automatically hide after this date.
+                  Banner will automatically hide after this date.
                 </small>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: editingBanner.promotion?.isActive ? '#ecfdf5' : '#f9fafb', borderRadius: '8px', border: editingBanner.promotion?.isActive ? '1px solid #a7f3d0' : '1px solid #e5e7eb' }}>
                 <input
                   type="checkbox"
-                  id="isActive"
+                  id="isActiveBanner"
                   checked={editingBanner.promotion?.isActive || false}
                   onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, isActive: e.target.checked } })}
                   style={{ width: '1.25rem', height: '1.25rem', accentColor: '#059669' }}
                 />
-                <label htmlFor="isActive" style={{ fontWeight: 600, color: editingBanner.promotion?.isActive ? '#065f46' : '#4b5563', marginBottom: 0, cursor: 'pointer' }}>
-                  Enable this {editingBanner.type === 'story' ? 'story' : 'banner'}
+                <label htmlFor="isActiveBanner" style={{ fontWeight: 600, color: editingBanner.promotion?.isActive ? '#065f46' : '#4b5563', marginBottom: 0, cursor: 'pointer' }}>
+                  Enable this banner
                 </label>
               </div>
 
@@ -1052,9 +1022,191 @@ export default function DashboardClient({ initialPosts, categories = [] }) {
                 onClick={handleSaveBanner}
                 style={{ marginTop: '1rem', padding: '0.75rem 1.5rem', background: 'linear-gradient(135deg, #74b75c, #5e9e48)', color: 'white', border: 'none', borderRadius: '9px', fontWeight: 600, cursor: 'pointer', fontSize: '1rem', width: 'fit-content', boxShadow: '0 4px 10px rgba(116, 183, 92, 0.25)' }}
               >
-                Save {editingBanner.type === 'story' ? 'Story Campaign' : 'Banner'}
+                Save Banner
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'stories' && (
+        <div style={{ padding: '1rem 0' }}>
+          <div className="banner-tabs" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem', alignItems: 'center' }}>
+            <button
+              onClick={() => setActiveStoryTab('post-stories')}
+              className={`banner-tab${activeStoryTab === 'post-stories' ? ' active' : ''}`}
+            >
+              📝 Active Post Stories
+            </button>
+            <button
+              onClick={() => loadBannerToEdit('new-story')}
+              className={`banner-tab banner-tab-new${activeStoryTab === 'new-story' ? ' active' : ''}`}
+              style={{ background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0' }}
+            >
+              + Custom Story
+            </button>
+            {bannerSettings.filter(b => b.type === 'story' || b.promotion?.placement === 'story').map((banner) => (
+              <button
+                key={banner._id}
+                onClick={() => loadBannerToEdit(banner._id)}
+                className={`banner-tab${activeStoryTab === banner._id ? ' active' : ''}`}
+                style={{ borderColor: activeStoryTab === banner._id ? '#74b75c' : '#d1fae5' }}
+              >
+                🎬 {banner.name || 'Custom Story'}
+              </button>
+            ))}
+          </div>
+
+          <div className="banner-form-card" style={{ marginTop: '1rem' }}>
+            {activeStoryTab === 'post-stories' ? (
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', marginBottom: '1.5rem' }}>Currently Active Post Stories</h3>
+                <table className="dashboard-table posts-table">
+                  <thead>
+                    <tr>
+                      <th style={{ padding: '1rem' }}>Post Title</th>
+                      <th style={{ padding: '1rem' }}>Author</th>
+                      <th style={{ padding: '1rem' }}>Story Expiry</th>
+                      <th style={{ padding: '1rem', textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {posts.filter(p => p.story?.isActive).length === 0 ? (
+                      <tr><td colSpan="4" style={{ padding: '1.5rem', textAlign: 'center', color: '#6b7280' }}>No posts are currently running as stories.</td></tr>
+                    ) : (
+                      posts.filter(p => p.story?.isActive).map(post => (
+                        <tr key={post._id}>
+                          <td style={{ padding: '1rem', fontWeight: '500' }}>{post.title}</td>
+                          <td style={{ padding: '1rem', color: '#4b5563' }}>{post.author || 'Admin'}</td>
+                          <td style={{ padding: '1rem', color: '#6b7280' }}>
+                            {post.story?.endDate ? formatDate(post.story.endDate) : 'Never'}
+                          </td>
+                          <td style={{ padding: '1rem', textAlign: 'right' }}>
+                            <a href={`/admin/editor?id=${post._id}`} className="row-action edit" style={{ display: 'inline-block' }}>Edit Post</a>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#1f2937', margin: 0 }}>
+                      {editingBanner._id ? 'Edit Custom Story' : 'New Custom Story'}
+                    </h3>
+                    <span style={{
+                      fontSize: '0.75rem',
+                      padding: '0.2rem 0.6rem',
+                      borderRadius: '999px',
+                      fontWeight: 600,
+                      background: '#ecfdf5',
+                      color: '#065f46'
+                    }}>
+                      Custom Story
+                    </span>
+                  </div>
+                  {editingBanner._id && (
+                    <button onClick={handleBannerDelete} style={{ background: 'none', border: 'none', color: '#dc2626', fontWeight: 600, cursor: 'pointer' }}>Delete Story</button>
+                  )}
+                </div>
+
+                <div className="banner-form-grid">
+                  <div className="banner-field">
+                    <label>Story Name (Internal)</label>
+                    <input
+                      type="text"
+                      value={editingBanner.name || ''}
+                      onChange={e => setEditingBanner({ ...editingBanner, name: e.target.value })}
+                      placeholder="e.g. Clean Air Awareness"
+                    />
+                  </div>
+
+                  <div className="banner-field">
+                    <label>Image URL (9:16 Story Card)</label>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <input
+                        type="text"
+                        value={editingBanner.promotion?.imageUrl || ''}
+                        onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, imageUrl: e.target.value } })}
+                        style={{ flexGrow: 1 }}
+                        placeholder="https://..."
+                      />
+                      <button
+                        onClick={handleBannerImageUpload}
+                        style={{ padding: '0.75rem 1.25rem', background: '#f3f4f6', border: '1px solid #e5e7eb', color: '#4b5563', borderRadius: '9px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }}
+                      >
+                        Upload
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="banner-field">
+                    <label>Image Alt Text (SEO)</label>
+                    <input
+                      type="text"
+                      value={editingBanner.promotion?.imageAlt || ''}
+                      onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, imageAlt: e.target.value } })}
+                      placeholder="Describe the story image..."
+                    />
+                  </div>
+
+                  <div className="banner-field">
+                    <label>Story Caption</label>
+                    <input
+                      type="text"
+                      value={editingBanner.promotion?.text || ''}
+                      onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, text: e.target.value } })}
+                      placeholder="e.g. 10 Ways To Clean Indoor Air..."
+                    />
+                  </div>
+
+                  <div className="banner-field">
+                    <label>Destination Link (Swipe Up / Tap)</label>
+                    <input
+                      type="text"
+                      value={editingBanner.promotion?.link || ''}
+                      onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, link: e.target.value } })}
+                      placeholder="https://... or /test-blog/post-slug"
+                    />
+                  </div>
+
+                  <div className="banner-field">
+                    <label>Schedule End Date (Automatic Expiry)</label>
+                    <input
+                      type="date"
+                      value={editingBanner.promotion?.endDate ? new Date(editingBanner.promotion.endDate).toISOString().split('T')[0] : ''}
+                      onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, endDate: e.target.value } })}
+                    />
+                    <small style={{ color: '#6b7280', fontSize: '0.8rem', marginTop: '0.25rem', display: 'block' }}>
+                      Story will automatically hide after this date.
+                    </small>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', background: editingBanner.promotion?.isActive ? '#ecfdf5' : '#f9fafb', borderRadius: '8px', border: editingBanner.promotion?.isActive ? '1px solid #a7f3d0' : '1px solid #e5e7eb' }}>
+                    <input
+                      type="checkbox"
+                      id="isActiveStory"
+                      checked={editingBanner.promotion?.isActive || false}
+                      onChange={e => setEditingBanner({ ...editingBanner, promotion: { ...editingBanner.promotion, isActive: e.target.checked } })}
+                      style={{ width: '1.25rem', height: '1.25rem', accentColor: '#059669' }}
+                    />
+                    <label htmlFor="isActiveStory" style={{ fontWeight: 600, color: editingBanner.promotion?.isActive ? '#065f46' : '#4b5563', marginBottom: 0, cursor: 'pointer' }}>
+                      Enable this custom story
+                    </label>
+                  </div>
+
+                  <button
+                    onClick={handleSaveBanner}
+                    style={{ marginTop: '1rem', padding: '0.75rem 1.5rem', background: 'linear-gradient(135deg, #74b75c, #5e9e48)', color: 'white', border: 'none', borderRadius: '9px', fontWeight: 600, cursor: 'pointer', fontSize: '1rem', width: 'fit-content', boxShadow: '0 4px 10px rgba(116, 183, 92, 0.25)' }}
+                  >
+                    Save Story Campaign
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

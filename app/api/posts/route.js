@@ -13,20 +13,26 @@ const CORS_HEADERS = {
 };
 
 function translatePost(post, lang) {
-  if (!lang || lang === 'en') return post;
+  // Inject the Prana Air fallback logo directly into the API response
+  // so any frontend (like the main blog) automatically shows it when missing.
+  const fallbackLogo = 'https://pranaair.com/img/prana-air-logo.webp';
+  let featuredImage = post.featuredImage || fallbackLogo;
+
+  if (!lang || lang === 'en') return { ...post, featuredImage };
 
   const translations = post.translations;
-  if (!translations) return post;
+  if (!translations) return { ...post, featuredImage };
 
   // Handle both Map and plain object representations
   const t = translations.get ? translations.get(lang) : translations[lang];
-  if (!t) return post;
+  if (!t) return { ...post, featuredImage };
 
   return {
     ...post,
     title: t.title || post.title,
     content: t.content || post.content,
     excerpt: t.excerpt || post.excerpt,
+    featuredImage: featuredImage,
     seo: {
       title: t.seo?.title || post.seo?.title,
       description: t.seo?.description || post.seo?.description,

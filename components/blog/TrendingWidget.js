@@ -42,12 +42,18 @@ export default function TrendingWidget({ lang = 'en', title = 'Trending Articles
 
   const cleanImageUrl = (img) => {
     if (!img) return '/uploads/featured/placeholder.jpg';
-    if (img.startsWith('http')) return img;
-    if (img.includes('wp-content/uploads/')) {
-      const match = img.match(/wp-content\/uploads\/.*/);
-      if (match) return '/' + match[0];
+    if (img.startsWith('http://') || img.startsWith('https://')) return img;
+    let path = img;
+    if (path.includes('wp-content/uploads/')) {
+      const match = path.match(/wp-content\/uploads\/.*/);
+      if (match) path = '/' + match[0];
     }
-    return img.startsWith('/') ? img : `/${img}`;
+    const cleanImg = path.startsWith('/') ? path : `/${path}`;
+    if (process.env.NEXT_PUBLIC_DOMAIN) {
+      const base = process.env.NEXT_PUBLIC_DOMAIN.replace(/\/+$/, '');
+      return `${base}${cleanImg}`;
+    }
+    return cleanImg;
   };
 
   return (

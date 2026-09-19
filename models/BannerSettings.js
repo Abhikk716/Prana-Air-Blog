@@ -21,6 +21,7 @@ const BannerSettingsSchema = new mongoose.Schema(
     },
     promotion: {
       imageUrl: { type: String, default: '' },
+      imageAlt: { type: String, default: '' }, // For SEO
       text: { type: String, default: '' },
       link: { type: String, default: '' },
       placement: { type: String, enum: ['sidebar', 'post_top', 'post_bottom', 'story'], default: 'sidebar' },

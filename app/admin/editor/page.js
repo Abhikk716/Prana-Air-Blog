@@ -1683,6 +1683,9 @@ function BlogEditorContent() {
                     height: 3300,
                     min_height: 3000,
                     resize: true,
+                    relative_urls: false,
+                    remove_script_host: false,
+                    convert_urls: false,
                     // Menubar + toolbar dock under the pinned title block while
                     // the (page-scrolling) editor is in view.
                     toolbar_sticky: true,
@@ -2736,7 +2739,11 @@ function BlogEditorContent() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {featuredImage && (
                   <div style={{ position: 'relative', width: '100%', aspectRatio: '16/9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #1e293b' }}>
-                    <img src={featuredImage} alt="Featured Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img
+                      src={featuredImage.startsWith('/') && !featuredImage.startsWith('//') && process.env.NEXT_PUBLIC_DOMAIN ? `${process.env.NEXT_PUBLIC_DOMAIN.replace(/\/+$/, '')}${featuredImage}` : featuredImage}
+                      alt="Featured Preview"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
                     <button
                       type="button"
                       onClick={() => setFeaturedImage('')}
